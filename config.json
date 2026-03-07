@@ -1,1 +1,17 @@
-
+{
+  "sources": [
+    {
+      "name": "تافرطة tafrata",
+      "url": "https://www.facebook.com/tafratag/reels/",
+      "type": "facebook"
+    }
+  ],
+  "publishers": [
+    {
+      "name": "A",
+      "green_screen_id": "vif-green-sc_uxjtrr",
+      "outro_id": "vif-outro_tsuzy1",
+      "title_color": "0x1a237e@0.85"
+    }
+  ]
+}

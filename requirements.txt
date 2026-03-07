@@ -1,1 +1,6 @@
-
+yt-dlp
+cloudinary
+requests
+selenium
+webdriver-manager
+Pillow
