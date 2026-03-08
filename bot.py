@@ -90,20 +90,26 @@ def wrap_text(draw, text, font, max_w):
 # ══════════════════════════════════════════════════════════════
 
 def render_overlay(title, location, date_str, visibility, color_hex, W, H):
+    """
+    يرسم overlay مقسّم إلى ملفين:
+      /tmp/overlay_permanent.png  ← المكان + التاريخ + متداول (يبقى طول الفيديو)
+      /tmp/overlay_title.png      ← شريط العنوان فقط (يختفي بعد 12 ثانية)
+    ويُعيد مسار الملف الكامل القديم للتوافق.
+    """
     from PIL import Image, ImageDraw
 
-    img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    pad  = int(W * 0.04)
+    white = (255, 255, 255, 255)
+    pad   = int(W * 0.04)
 
     # لون شريط العنوان
     hex_str   = color_hex.split("@")[0].replace("0x", "").replace("#", "")
     alpha_val = int(float(color_hex.split("@")[1]) * 255) if "@" in color_hex else 217
     title_bg  = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), alpha_val)
 
-    white = (255, 255, 255, 255)
+    # ── Overlay 1: العناصر الدائمة (مكان + تاريخ + متداول) ────────
+    img_perm  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw_perm = ImageDraw.Draw(img_perm)
 
-    # ══ 1. المكان + التاريخ ─ أعلى اليسار، أبيض فقط بدون ظل ══
     info_sz = max(32, int(W * 0.036))
     font_i  = load_font(info_sz)
 
@@ -111,31 +117,32 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
     if location: info_lines.append(location)
     if date_str: info_lines.append(date_str)
 
-    y = pad
+    # ← تنزيل المكان/التاريخ للأسفل بمقدار 8% من الارتفاع
+    y = int(H * 0.08)
     for line in info_lines:
-        lw, lh = get_tw(draw, line, font_i)
-        draw.text((pad, y), line, font=font_i, fill=white)
+        lw, lh = get_tw(draw_perm, line, font_i)
+        draw_perm.text((pad, y), line, font=font_i, fill=white)
         y += lh + int(info_sz * 0.4)
 
-    # ══ 2. متداول / خاص ─ نص أبيض عمودي أقصى اليسار، بدون ظل ══
+    # متداول / خاص عمودي
     if visibility:
         badge_sz = max(28, int(W * 0.032))
         font_b   = load_font(badge_sz)
-        bw, bh   = get_tw(draw, visibility, font_b)
-
-        margin = int(badge_sz * 0.3)
-        tmp_w  = bw + margin * 2
-        tmp_h  = bh + margin * 2
-        tmp    = Image.new("RGBA", (tmp_w, tmp_h), (0, 0, 0, 0))
-        td     = ImageDraw.Draw(tmp)
+        bw, bh   = get_tw(draw_perm, visibility, font_b)
+        margin   = int(badge_sz * 0.3)
+        tmp      = Image.new("RGBA", (bw + margin*2, bh + margin*2), (0, 0, 0, 0))
+        td       = ImageDraw.Draw(tmp)
         td.text((margin, margin), visibility, font=font_b, fill=white)
+        rotated  = tmp.rotate(90, expand=True)
+        img_perm.paste(rotated, (4, (H - rotated.height) // 2), rotated)
 
-        rotated = tmp.rotate(90, expand=True)
-        rx = 4
-        ry = (H - rotated.height) // 2
-        img.paste(rotated, (rx, ry), rotated)
+    img_perm.save("/tmp/overlay_permanent.png", "PNG")
+    print("✅ overlay_permanent.png")
 
-    # ══ 3. شريط العنوان ─ موضع مطابق للمثال (16% من الأسفل) ══
+    # ── Overlay 2: شريط العنوان فقط ────────────────────────────────
+    img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw_title = ImageDraw.Draw(img_title)
+
     if title:
         font_size = max(20, int(W * 0.0352))
         font_t    = load_font(font_size)
@@ -144,25 +151,29 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
         bar_w     = W - int(W * 0.08)
         usable    = bar_w - 2 * pad_h
 
-        lines  = wrap_text(draw, title, font_t, usable)
+        lines  = wrap_text(draw_title, title, font_t, usable)
         line_h = int(font_size * 1.5)
         bar_h  = len(lines) * line_h + 2 * pad_v
         bar_x  = (W - bar_w) // 2
         bar_y  = H - bar_h - int(H * 0.16)
 
-        draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
+        draw_title.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
 
         for i, line in enumerate(lines):
-            lw, _ = get_tw(draw, line, font_t)
+            lw, _ = get_tw(draw_title, line, font_t)
             tx    = bar_x + (bar_w - lw) // 2
             ty    = bar_y + pad_v + i * line_h
-            draw.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
-            draw.text((tx,   ty),   line, font=font_t, fill=white)
+            draw_title.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
+            draw_title.text((tx,   ty),   line, font=font_t, fill=white)
 
-    out = "/tmp/full_overlay.png"
-    img.save(out, "PNG")
-    print(f"✅ Overlay محفوظ: {out}")
-    return out
+    img_title.save("/tmp/overlay_title.png", "PNG")
+    print("✅ overlay_title.png")
+
+    # نحفظ أيضاً النسخة الكاملة للتوافق مع الكود القديم
+    combined = Image.alpha_composite(img_perm, img_title)
+    combined.save("/tmp/full_overlay.png", "PNG")
+    print("✅ full_overlay.png")
+    return "/tmp/full_overlay.png"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -170,30 +181,57 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
 # ══════════════════════════════════════════════════════════════
 
 def apply_overlay(main, overlay_png, out, video_dur):
-    print("✍️  تطبيق الـ Overlay...")
-    show_start = 1.2
-    fade_in    = 0.8
-    loop_dur   = video_dur + 2   # يغطي كامل الفيديو
+    """
+    يطبّق overlayين:
+      overlay_permanent.png  ← يظهر من الثانية 1.2 ويبقى حتى النهاية
+      overlay_title.png      ← يظهر من الثانية 1.2 ويختفي بعد 12 ثانية (fade-out 0.6s)
+    """
+    print("✍️  تطبيق الـ Overlay (عنوان يختفي بعد 12 ثانية)...")
 
-    fc = (f"[1:v]format=yuva420p,"
-          f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[ovr];"
-          f"[0:v][ovr]overlay=0:0[v]")
-    r = subprocess.run(
-        ["ffmpeg", "-y", "-i", main,
-         "-loop", "1", "-t", str(loop_dur), "-i", overlay_png,
-         "-filter_complex", fc,
-         "-map", "[v]", "-map", "0:a",
-         "-c:v", "libx264", "-c:a", "copy", "-preset", "fast", "-shortest", out],
-        capture_output=True, text=True, timeout=600
-    )
-    if os.path.exists(out) and os.path.getsize(out) > 1000:
-        print("  ✅ تم"); return True
+    perm_png  = "/tmp/overlay_permanent.png"
+    title_png = "/tmp/overlay_title.png"
+    loop_dur  = video_dur + 2
 
-    # Fallback بدون fade
-    print("  ⚠️  fallback (بدون fade)...")
-    fc2 = (f"[1:v]format=yuva420p[ovr];"
-           f"[0:v][ovr]overlay=0:0:enable='gte(t,{show_start})'[v]")
-    subprocess.run(
+    show_start  = 1.2
+    fade_in     = 0.8
+    title_hide  = 12.0   # ← وقت بدء الاختفاء
+    fade_out    = 0.6    # ← مدة الـ fade-out
+
+    # تحقق من وجود الملفين المنفصلين
+    use_split = (os.path.exists(perm_png) and os.path.exists(title_png))
+
+    if use_split:
+        fc = (
+            # Permanent overlay: fade-in فقط، يبقى حتى النهاية
+            f"[1:v]format=yuva420p,"
+            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[perm];"
+            # Title overlay: fade-in ثم fade-out عند الثانية 12
+            f"[2:v]format=yuva420p,"
+            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1,"
+            f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
+            # دمج الثلاثة
+            f"[0:v][perm]overlay=0:0[tmp];"
+            f"[tmp][ttl]overlay=0:0[v]"
+        )
+        r = subprocess.run(
+            ["ffmpeg", "-y",
+             "-i", main,
+             "-loop", "1", "-t", str(loop_dur), "-i", perm_png,
+             "-loop", "1", "-t", str(loop_dur), "-i", title_png,
+             "-filter_complex", fc,
+             "-map", "[v]", "-map", "0:a",
+             "-c:v", "libx264", "-c:a", "copy", "-preset", "fast", "-shortest", out],
+            capture_output=True, text=True, timeout=600
+        )
+        if os.path.exists(out) and os.path.getsize(out) > 1000:
+            print("  ✅ تم (split overlay)"); return True
+        print(f"  ⚠️ split فشل، تجربة fallback...\n{r.stderr[-200:]}")
+
+    # Fallback: overlay كامل مع fade-in فقط
+    fc2 = (f"[1:v]format=yuva420p,"
+           f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[ovr];"
+           f"[0:v][ovr]overlay=0:0[v]")
+    r2 = subprocess.run(
         ["ffmpeg", "-y", "-i", main,
          "-loop", "1", "-t", str(loop_dur), "-i", overlay_png,
          "-filter_complex", fc2,
@@ -202,7 +240,7 @@ def apply_overlay(main, overlay_png, out, video_dur):
         capture_output=True, text=True, timeout=600
     )
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
-    print("  ✅" if ok else f"  ❌\n{r.stderr[-300:]}"); return ok
+    print("  ✅ (fallback)" if ok else f"  ❌\n{r2.stderr[-300:]}"); return ok
 
 
 # ══════════════════════════════════════════════════════════════
@@ -346,7 +384,9 @@ def cleanup_pub(name):
 
 def cleanup_global():
     for f in ["/tmp/main.mp4", "/tmp/main_scaled.mp4",
-              "/tmp/overlaid_base.mp4", "/tmp/full_overlay.png", "/tmp/concat.txt"]:
+              "/tmp/overlaid_base.mp4", "/tmp/full_overlay.png",
+              "/tmp/overlay_permanent.png", "/tmp/overlay_title.png",
+              "/tmp/concat.txt"]:
         if os.path.exists(f): os.remove(f)
 
 
