@@ -29,23 +29,8 @@ print(f"📍 {VIDEO_LOCATION or '—'}  📅 {VIDEO_DATE or '—'}  🔒 {VIDEO_
 
 
 # ══════════════════════════════════════════════════════════════
-#   تشكيل النص العربي
-#   ملاحظة مهمة: Montserrat-Arabic يشكّل الحروف تلقائياً،
-#   لذلك نستخدم bidi فقط لإعادة ترتيب الكلمات للعرض LTR في PIL.
-#   استخدام arabic_reshaper معه يسبب تشكيلاً مزدوجاً = نص معكوس.
+#   خط Montserrat-Arabic يعالج العربية مباشرة — بدون أي مكتبة
 # ══════════════════════════════════════════════════════════════
-
-def ar(text):
-    """إعداد نص عربي للرسم في PIL — bidi فقط بدون reshaper."""
-    if not text:
-        return ""
-    try:
-        from bidi.algorithm import get_display
-        return get_display(str(text))
-    except Exception as e:
-        print(f"  ⚠️ bidi: {e} — سيُستخدم النص الأصلي")
-        return str(text)
-
 
 def load_font(size):
     from PIL import ImageFont
@@ -56,9 +41,12 @@ def load_font(size):
     ]:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, size)
+                f = ImageFont.truetype(path, size)
+                print(f"  ✅ خط: {os.path.basename(path)} ({size}px)")
+                return f
             except:
                 continue
+    print(f"  ⚠️ خط افتراضي ({size}px)")
     return ImageFont.load_default()
 
 
@@ -67,20 +55,37 @@ def get_tw(draw, text, font):
     return bb[2] - bb[0], bb[3] - bb[1]
 
 
+def wrap_text(draw, text, font, max_w):
+    """تقسيم النص إلى أسطر حسب العرض الأقصى."""
+    words = text.split()
+    lines, current = [], []
+    for word in words:
+        test = " ".join(current + [word])
+        if get_tw(draw, test, font)[0] <= max_w:
+            current.append(word)
+        else:
+            if current:
+                lines.append(" ".join(current))
+            current = [word]
+    if current:
+        lines.append(" ".join(current))
+    return lines if lines else [text]
+
+
 # ══════════════════════════════════════════════════════════════
-#   رسم الـ Overlay
-#   التصميم (مطابق للصورة المرجعية):
+#   رسم الـ Overlay الكامل
+#
+#   التصميم:
 #   ┌─────────────────────────────────────────────┐
-#   │ 📍 مراكش                                    │ ← أعلى اليسار، بدون خلفية
-#   │ 📅 08/08/2025                               │
+#   │ طابرلا                  [بدون خلفية]        │  ← أعلى يسار
+#   │ 2026-03-08                                  │
 #   │                                             │
-#   │          محتوى الفيديو                      │
+#   │           محتوى الفيديو                     │
 #   │                                             │
-#   │ █ متداول  (شريط ملوّن يسار بدون نص بارز)    │ ← يسار، وسط، بدون خلفية (نص فقط)
+#   │متداول  ← نص ملوّن عمودي أقصى اليسار        │  ← بدون خلفية
 #   │                                             │
-#   │ ████████████████████████████████████████    │ ← شريط العنوان قبل منطقة GS
-#   │ عنوان الفيديو                               │
-#   │ ████████████████████████████████████████    │
+#   │ █████████ شريط العنوان ████████████        │  ← فوق منطقة GS بـ 22%
+#   │         عنوان الفيديو                       │
 #   └─────────────────────────────────────────────┘
 # ══════════════════════════════════════════════════════════════
 
@@ -96,111 +101,92 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
     alpha_val = int(float(color_hex.split("@")[1]) * 255) if "@" in color_hex else 217
     title_bg  = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), alpha_val)
 
-    shadow = (0, 0, 0, 200)   # لون الظل لجميع النصوص
     white  = (255, 255, 255, 255)
+    shadow = (0, 0, 0, 220)
 
-    # ══ 1. متداول / خاص ─ نص عمودي يسار بدون خلفية ══
-    if visibility:
-        badge_sz = max(28, int(W * 0.032))
-        font_b   = load_font(badge_sz)
-        vis_txt  = ar(visibility)
-        bw, bh   = get_tw(draw, vis_txt, font_b)
+    def draw_outlined(d, pos, text, font, color=white):
+        """رسم نص مع هالة سوداء للقراءة بدون خلفية."""
+        x, y = pos
+        for dx, dy in [(-2,-2),(2,-2),(-2,2),(2,2),(0,-2),(0,2),(-2,0),(2,0)]:
+            d.text((x+dx, y+dy), text, font=font, fill=shadow)
+        d.text((x, y), text, font=font, fill=color)
 
-        # نرسم النص على صورة مؤقتة ثم ندوّرها 90°
-        tmp_w = bw + int(badge_sz * 0.4)
-        tmp_h = bh + int(badge_sz * 0.4)
-        tmp   = Image.new("RGBA", (tmp_w, tmp_h), (0, 0, 0, 0))
-        td    = ImageDraw.Draw(tmp)
-        tx    = (tmp_w - bw) // 2
-        ty    = (tmp_h - bh) // 2
-        # ظل
-        td.text((tx+2, ty+2), vis_txt, font=font_b, fill=shadow)
-        # نص
-        vis_color = (16, 185, 129, 255) if visibility == "متداول" else (239, 68, 68, 255)
-        td.text((tx, ty), vis_txt, font=font_b, fill=vis_color)
-
-        rotated = tmp.rotate(90, expand=True)
-        # وسط الفيديو عمودياً، أقصى اليسار
-        ry = (H - rotated.height) // 2
-        rx = pad // 2
-        img.paste(rotated, (rx, ry), rotated)
-
-    # ══ 2. المكان + التاريخ ─ أعلى اليسار، بدون خلفية ══
-    info_sz = max(30, int(W * 0.034))
+    # ══ 1. المكان + التاريخ ─ أعلى اليسار، بدون خلفية ══
+    info_sz = max(32, int(W * 0.036))
     font_i  = load_font(info_sz)
 
     info_lines = []
-    if location: info_lines.append(ar(location))
-    if date_str: info_lines.append(ar(date_str))
+    if location: info_lines.append(location)
+    if date_str: info_lines.append(date_str)
 
-    if info_lines:
-        y = pad
-        for line in info_lines:
-            lw, lh = get_tw(draw, line, font_i)
-            tx_pos = pad
-            # ظل ثخين للقراءة بدون خلفية
-            for dx, dy in [(-2,-2),(2,-2),(-2,2),(2,2),(0,-2),(0,2),(-2,0),(2,0)]:
-                draw.text((tx_pos+dx, y+dy), line, font=font_i, fill=shadow)
-            draw.text((tx_pos, y), line, font=font_i, fill=white)
-            y += lh + int(info_sz * 0.45)
+    y = pad
+    for line in info_lines:
+        lw, lh = get_tw(draw, line, font_i)
+        draw_outlined(draw, (pad, y), line, font_i)
+        y += lh + int(info_sz * 0.4)
+
+    # ══ 2. متداول / خاص ─ نص عمودي أقصى اليسار، بدون خلفية ══
+    if visibility:
+        badge_sz = max(28, int(W * 0.032))
+        font_b   = load_font(badge_sz)
+        bw, bh   = get_tw(draw, visibility, font_b)
+
+        # رسم على صورة مؤقتة ثم تدوير 90°
+        margin = int(badge_sz * 0.3)
+        tmp_w  = bw + margin * 2
+        tmp_h  = bh + margin * 2
+        tmp    = Image.new("RGBA", (tmp_w, tmp_h), (0, 0, 0, 0))
+        td     = ImageDraw.Draw(tmp)
+
+        vis_color = (16, 185, 129, 255) if visibility == "متداول" else (239, 68, 68, 255)
+        # ظل
+        for dx, dy in [(-2,-2),(2,-2),(-2,2),(2,2),(0,-2),(0,2),(-2,0),(2,0)]:
+            td.text((margin+dx, margin+dy), visibility, font=font_b, fill=shadow)
+        td.text((margin, margin), visibility, font=font_b, fill=vis_color)
+
+        rotated = tmp.rotate(90, expand=True)
+        # وسط الفيديو، أقصى اليسار
+        rx = 4
+        ry = (H - rotated.height) // 2
+        img.paste(rotated, (rx, ry), rotated)
 
     # ══ 3. شريط العنوان ─ فوق منطقة GS بـ 22% ══
     if title:
-        title_sz = max(38, int(W * 0.044))
+        title_sz = max(40, int(W * 0.046))
         font_t   = load_font(title_sz)
-        ar_title = ar(title)
 
-        usable = W - pad * 2
-
-        # تقسيم إلى أسطر
-        words = ar_title.split()
-        lines, current = [], []
-        for word in words:
-            test = " ".join(current + [word])
-            ww, _ = get_tw(draw, test, font_t)
-            if ww <= usable:
-                current.append(word)
-            else:
-                if current: lines.append(" ".join(current))
-                current = [word]
-        if current: lines.append(" ".join(current))
-        if not lines: lines = [ar_title]
-
-        line_h = int(title_sz * 1.65)
-        vpad   = int(title_sz * 0.7)
+        lines  = wrap_text(draw, title, font_t, W - pad * 2)
+        line_h = int(title_sz * 1.6)
+        vpad   = int(title_sz * 0.65)
         bar_h  = len(lines) * line_h + vpad * 2
         bar_y  = H - bar_h - int(H * 0.22)
 
+        # خلفية الشريط
         draw.rectangle([0, bar_y, W, bar_y + bar_h], fill=title_bg)
 
         for i, line in enumerate(lines):
             lw, _ = get_tw(draw, line, font_t)
-            tx_pos = (W - lw) // 2
-            ty_pos = bar_y + vpad + i * line_h
-            draw.text((tx_pos+2, ty_pos+2), line, font=font_t, fill=(0,0,0,110))
-            draw.text((tx_pos,   ty_pos),   line, font=font_t, fill=white)
+            tx    = (W - lw) // 2
+            ty    = bar_y + vpad + i * line_h
+            # ظل خفيف
+            draw.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,100))
+            draw.text((tx,   ty),   line, font=font_t, fill=white)
 
     out = "/tmp/full_overlay.png"
     img.save(out, "PNG")
-    print(f"✅ Overlay: {out}")
+    print(f"✅ Overlay محفوظ: {out}")
     return out
 
 
 # ══════════════════════════════════════════════════════════════
-#   تطبيق الـ Overlay — يبقى طول الفيديو (لا يختفي مبكراً)
+#   تطبيق الـ Overlay — fade-in فقط، يبقى حتى نهاية الفيديو
 # ══════════════════════════════════════════════════════════════
 
 def apply_overlay(main, overlay_png, out, video_dur):
-    """
-    يُطبّق الـ overlay بـ fade-in بسيط فقط.
-    يبقى ظاهراً حتى نهاية الفيديو الرئيسي
-    (الـ outro يُضاف بعدها فلا يتأثر بالـ overlay).
-    """
     print("✍️  تطبيق الـ Overlay...")
     show_start = 1.2
     fade_in    = 0.8
-    # نمدد loop الصورة لكامل مدة الفيديو + هامش
-    loop_dur   = video_dur + 2
+    loop_dur   = video_dur + 2   # يغطي كامل الفيديو
 
     fc = (f"[1:v]format=yuva420p,"
           f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[ovr];"
@@ -217,7 +203,7 @@ def apply_overlay(main, overlay_png, out, video_dur):
         print("  ✅ تم"); return True
 
     # Fallback بدون fade
-    print("  ⚠️  fallback...")
+    print("  ⚠️  fallback (بدون fade)...")
     fc2 = (f"[1:v]format=yuva420p[ovr];"
            f"[0:v][ovr]overlay=0:0:enable='gte(t,{show_start})'[v]")
     subprocess.run(
@@ -229,8 +215,7 @@ def apply_overlay(main, overlay_png, out, video_dur):
         capture_output=True, text=True, timeout=600
     )
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
-    print("  ✅ (fallback)" if ok else f"  ❌ فشل\n{r.stderr[-300:]}")
-    return ok
+    print("  ✅" if ok else f"  ❌\n{r.stderr[-300:]}"); return ok
 
 
 # ══════════════════════════════════════════════════════════════
@@ -294,7 +279,7 @@ def apply_green_screen(main, gs, out, W, H, dur):
           f"colorkey=0x00FF00:0.3:0.1,setpts=PTS-STARTPTS[g];"
           f"[0:v][g]overlay=0:0[v]")
     for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
-        r = subprocess.run(
+        subprocess.run(
             ["ffmpeg", "-y", "-i", main, "-i", gs, "-filter_complex", fc,
              *maps, "-c:v","libx264","-c:a","aac","-shortest","-preset","fast", out],
             capture_output=True, text=True, timeout=600
@@ -406,7 +391,7 @@ if src_w != TARGET_W or src_h != TARGET_H:
 
 W, H = TARGET_W, TARGET_H
 
-# 3. رسم الـ Overlay (بلون الصفحة الأولى)
+# 3. رسم الـ Overlay
 print("\n🖌️  رسم الـ Overlay...")
 first_color = target_pubs[0].get("title_color", "0x1a237e@0.85")
 overlay_png = render_overlay(VIDEO_TITLE, VIDEO_LOCATION, VIDEO_DATE,
@@ -428,7 +413,7 @@ for pub in target_pubs:
 
     current = overlaid_base
 
-    # overlay مخصص إذا اللون مختلف
+    # overlay بلون مخصص إذا اختلف
     if color != first_color:
         custom_png = render_overlay(VIDEO_TITLE, VIDEO_LOCATION, VIDEO_DATE,
                                      VIDEO_VISIBILITY, color, W, H)
