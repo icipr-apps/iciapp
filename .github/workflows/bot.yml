@@ -51,21 +51,17 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install --quiet \
-            yt-dlp \
-            cloudinary \
-            requests \
-            Pillow \
-            python-bidi
+          pip install yt-dlp cloudinary requests Pillow
 
       - name: Download Montserrat-Arabic font
         run: |
-          wget -q -O Montserrat-Arabic-Bold.ttf \
-            "https://raw.githubusercontent.com/typeagm/Montserrat-Arabic/master/fonts/Montserrat-Arabic-Bold.ttf" \
-            && echo "✅ Font downloaded" \
-            || echo "⚠️ Font download failed — using fallback"
+          if [ ! -f "Montserrat-Arabic-Bold.ttf" ]; then
+            wget -q -O Montserrat-Arabic-Bold.ttf \
+              "https://raw.githubusercontent.com/typeagm/Montserrat-Arabic/master/fonts/Montserrat-Arabic-Bold.ttf" \
+              || echo "Font not downloaded, will use system font"
+          fi
 
-      - name: Write Facebook cookies
+      - name: Write cookies file
         run: |
           if [ -n "${{ secrets.FB_COOKIES }}" ]; then
             echo "${{ secrets.FB_COOKIES }}" > /tmp/cookies.txt
