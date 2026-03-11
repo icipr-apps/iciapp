@@ -67,7 +67,7 @@ def render_title_overlay(title, color_hex, W, H):
     draw = ImageDraw.Draw(img)
 
     if title:
-        font_size = max(20, int(W * 0.048))
+        font_size = max(20, int(W * 0.042))
         font_t    = load_font(font_size)
         pad_h     = int(W * 0.05)
         pad_v     = int(H * 0.018)
