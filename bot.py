@@ -374,7 +374,7 @@ def upload_and_send(video_path, pub_name, title, source_url):
     print(f"  📡 Webhook أُرسل → {pub_name}")
 
     # انتظر 60 ثانية ثم احذف من Cloudinary لتوفير المساحة
-    time.sleep(60)
+    time.sleep(20)
     try:
         cloudinary.uploader.destroy(public_id, resource_type="video")
         print(f"  🗑️  حُذف من Cloudinary")
