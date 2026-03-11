@@ -67,18 +67,18 @@ def render_title_overlay(title, color_hex, W, H):
     draw = ImageDraw.Draw(img)
 
     if title:
-        font_size = max(20, int(W * 0.042))   # خط أكبر
+        font_size = max(20, int(W * 0.042))
         font_t    = load_font(font_size)
         pad_h     = int(W * 0.05)
         pad_v     = int(H * 0.018)
-        bar_w     = W - int(W * 0.25)         # عرض 75% — لا يحجب الشاشة كلها
+        bar_w     = W - int(W * 0.25)
         usable    = bar_w - 2 * pad_h
 
         lines  = wrap_text(draw, title, font_t, usable)
         line_h = int(font_size * 1.5)
         bar_h  = len(lines) * line_h + 2 * pad_v
         bar_x  = (W - bar_w) // 2
-        bar_y  = H - bar_h - int(H * 0.22)    # مرفوع للأعلى بعيداً عن الفوتر
+        bar_y  = H - bar_h - int(H * 0.22)
 
         draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
         for i, line in enumerate(lines):
@@ -103,9 +103,9 @@ def apply_png_frame(main, frame_png, out, W, H):
     fc = f"[1:v]scale={W}:{H}[frm];[0:v][frm]overlay=0:0[v]"
     for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
         subprocess.run(
-            ["ffmpeg", "-y", "-i", main, "-i", frame_png,
+            ["ffmpeg", "-y", "-threads", "2", "-i", main, "-i", frame_png,
              "-filter_complex", fc,
-             *maps, "-c:v","libx264","-c:a","copy","-preset","fast", out],
+             *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast", out],
             capture_output=True, text=True, timeout=600
         )
         if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -134,10 +134,10 @@ def apply_title_overlay(main, title_png, out, dur):
     )
     for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
         subprocess.run(
-            ["ffmpeg", "-y", "-i", main,
+            ["ffmpeg", "-y", "-threads", "2", "-i", main,
              "-loop", "1", "-t", str(loop_dur), "-i", title_png,
              "-filter_complex", fc,
-             *maps, "-c:v","libx264","-c:a","copy","-preset","fast","-shortest", out],
+             *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast","-shortest", out],
             capture_output=True, text=True, timeout=600
         )
         if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -161,7 +161,6 @@ def clean_title(raw):
     return raw.strip()
 
 def fetch_latest_from_page(page_url):
-    """يجلب رابط وعنوان آخر Reel من صفحة Facebook مع محاولات متعددة."""
     print(f"🔍 جلب آخر فيديو من: {page_url}")
 
     has_cookies = os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 50
@@ -293,9 +292,9 @@ def get_video_info(path):
 def scale_to_target(src, out, tw=1080, th=1920):
     print(f"📐 {tw}×{th}...")
     r = subprocess.run(
-        ["ffmpeg", "-y", "-i", src,
+        ["ffmpeg", "-y", "-threads", "2", "-i", src,
          "-vf", f"scale={tw}:{th}:force_original_aspect_ratio=increase,crop={tw}:{th},setsar=1",
-         "-c:v", "libx264", "-c:a", "aac", "-preset", "fast", out],
+         "-c:v", "libx264", "-c:a", "aac", "-preset", "ultrafast", out],
         capture_output=True, text=True, timeout=600
     )
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
@@ -333,8 +332,8 @@ def add_outro(main, outro, out, W, H):
         maps = ["-map","[ov]","-map","[oa]"]
 
     subprocess.run(
-        ["ffmpeg","-y","-i",main,"-i",outro,"-filter_complex",fc,
-         *maps,"-c:v","libx264","-c:a","aac","-preset","fast",out],
+        ["ffmpeg","-y","-threads","2","-i",main,"-i",outro,"-filter_complex",fc,
+         *maps,"-c:v","libx264","-c:a","aac","-preset","ultrafast",out],
         capture_output=True, text=True, timeout=600
     )
     if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -343,15 +342,15 @@ def add_outro(main, outro, out, W, H):
     with open("/tmp/concat.txt","w") as f:
         f.write(f"file '{main}'\nfile '{outro}'\n")
     subprocess.run(
-        ["ffmpeg","-y","-f","concat","-safe","0","-i","/tmp/concat.txt",
-         "-vf",f"scale={W}:{H},setsar=1","-c:v","libx264","-c:a","aac","-preset","fast",out],
+        ["ffmpeg","-y","-threads","2","-f","concat","-safe","0","-i","/tmp/concat.txt",
+         "-vf",f"scale={W}:{H},setsar=1","-c:v","libx264","-c:a","aac","-preset","ultrafast",out],
         capture_output=True, text=True, timeout=600
     )
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
     print("  ✅ (concat)" if ok else "  ❌"); return ok
 
 def upload_and_send(video_path, pub_name, title, source_url):
-    """رفع الفيديو بالجودة الأصلية بدون ضغط — الحل الرئيسي لمشكلة الجودة"""
+    """رفع الفيديو بالجودة الأصلية بدون ضغط"""
     mb = os.path.getsize(video_path) / 1024 / 1024
     print(f"  📤 رفع بالجودة الأصلية — {mb:.1f}MB")
 
@@ -373,8 +372,7 @@ def upload_and_send(video_path, pub_name, title, source_url):
     }, timeout=30)
     print(f"  📡 Webhook أُرسل → {pub_name}")
 
-    # انتظر 60 ثانية ثم احذف من Cloudinary لتوفير المساحة
-    time.sleep(20)
+    time.sleep(15)
     try:
         cloudinary.uploader.destroy(public_id, resource_type="video")
         print(f"  🗑️  حُذف من Cloudinary")
