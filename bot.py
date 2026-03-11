@@ -152,20 +152,23 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
                 gy = gy0 + row * rsp
                 d.ellipse([gx-dot_r,gy-dot_r,gx+dot_r,gy+dot_r], fill=color)
 
-    # ── الأيقونة يسار، النص على يمينها، الكل في يسار الفيديو ──
+    # ── RTL: أيقونة يمين، نص على شمالها، الكتلة في يسار الفيديو ──
     info_items = []
     if location: info_items.append(("location", location))
     if date_str: info_items.append(("date",     date_str))
 
     icon_sz  = int(info_sz * 0.46)
-    icon_gap = int(info_sz * 0.30)
+    icon_gap = int(info_sz * 0.28)
     y = int(H * 0.13)
 
     for kind, text in info_items:
         tw, th  = get_tw(draw_perm, text, font_i)
-        icon_cx = pad + icon_sz            # أيقونة أقصى اليسار
+
+        # النص يبدأ من pad (يسار)
+        text_x  = pad
+        # الأيقونة على يمين النص مباشرة
+        icon_cx = pad + tw + icon_gap + icon_sz
         icon_cy = y + th // 2
-        text_x  = pad + icon_sz * 2 + icon_gap   # نص على يمين الأيقونة
 
         draw_perm.text((text_x+2, y+2), text, font=font_i, fill=shadow)
         draw_perm.text((text_x,   y),   text, font=font_i, fill=white)
