@@ -1,4 +1,4 @@
-import os, json, subprocess, re, cloudinary, cloudinary.uploader, requests, time
+import os, json, subprocess, re, cloudinary, cloudinary.uploader, requests, time, sys
 
 # ─── إعدادات ────────────────────────────────────────────────
 COOKIES_FILE   = "/tmp/cookies.txt"
@@ -12,6 +12,7 @@ cloudinary.config(
 )
 
 VIDEO_PUBLISHER = os.environ.get("VIDEO_PUBLISHER", "ALL").strip()
+VIDEO_URL_INPUT = os.environ.get("VIDEO_URL", "").strip()   # رابط مباشر اختياري
 print(f"👤 {VIDEO_PUBLISHER}")
 
 
@@ -94,11 +95,10 @@ def render_title_overlay(title, color_hex, W, H):
 
 
 # ══════════════════════════════════════════════════════════════
-#   تطبيق PNG Frame الشفاف (إطار/بوردر — بدل green screen)
+#   تطبيق PNG Frame الشفاف
 # ══════════════════════════════════════════════════════════════
 
 def apply_png_frame(main, frame_png, out, W, H):
-    """يطبّق إطار PNG شفاف فوق الفيديو كاملاً."""
     print("🖼️  PNG Frame...")
     fc = f"[1:v]scale={W}:{H}[frm];[0:v][frm]overlay=0:0[v]"
     for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
@@ -115,7 +115,7 @@ def apply_png_frame(main, frame_png, out, W, H):
 
 
 # ══════════════════════════════════════════════════════════════
-#   تطبيق شريط العنوان (fade-in ثم يختفي بعد 12 ثانية)
+#   شريط العنوان (fade-in ثم يختفي بعد 12 ثانية)
 # ══════════════════════════════════════════════════════════════
 
 def apply_title_overlay(main, title_png, out, dur):
@@ -161,61 +161,128 @@ def clean_title(raw):
     return raw.strip()
 
 def fetch_latest_from_page(page_url):
-    """يجلب رابط وعنوان آخر Reel من صفحة Facebook."""
+    """يجلب رابط وعنوان آخر Reel من صفحة Facebook مع محاولات متعددة."""
     print(f"🔍 جلب آخر فيديو من: {page_url}")
 
-    for use_cookies in [False, True]:
-        cmd = ["yt-dlp", "--playlist-items", "1",
-               "--print", "%(webpage_url)s",
-               "--print", "%(title)s",
-               "--no-warnings"]
-        if use_cookies and os.path.exists(COOKIES_FILE):
-            cmd += ["--cookies", COOKIES_FILE]
-        cmd.append(page_url)
+    has_cookies = os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 50
 
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
+    # ── المحاولات المتعددة ──────────────────────────────────────
+    attempts = []
 
-        if len(lines) >= 2:
-            url   = lines[0] if lines[0].startswith("http") else lines[1]
-            title = clean_title(lines[1] if lines[0].startswith("http") else lines[0])
-            print(f"  ✅ {title[:70]}")
-            return url, title
+    # محاولة 1: --print مع cookies
+    if has_cookies:
+        attempts.append({
+            "label": "print+cookies",
+            "cmd": ["yt-dlp", "--playlist-items", "1",
+                    "--print", "%(webpage_url)s",
+                    "--print", "%(title)s",
+                    "--cookies", COOKIES_FILE,
+                    "--no-warnings", page_url]
+        })
 
-    # Fallback
-    for use_cookies in [False, True]:
-        cmd = ["yt-dlp", "--playlist-items", "1",
-               "--get-url", "--get-title", "--no-warnings",
-               "--format", "best[ext=mp4]/best"]
-        if use_cookies and os.path.exists(COOKIES_FILE):
-            cmd += ["--cookies", COOKIES_FILE]
-        cmd.append(page_url)
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
-        if len(lines) >= 2:
-            title = clean_title(lines[0])
-            url   = lines[-1]
-            print(f"  ✅ (fallback) {title[:60]}")
-            return url, title
-        elif len(lines) == 1 and lines[0].startswith("http"):
-            return lines[0], "بدون عنوان"
+    # محاولة 2: --print بدون cookies
+    attempts.append({
+        "label": "print-no-cookies",
+        "cmd": ["yt-dlp", "--playlist-items", "1",
+                "--print", "%(webpage_url)s",
+                "--print", "%(title)s",
+                "--no-warnings", page_url]
+    })
 
-    print("  ❌ فشل")
+    # محاولة 3: --get-url --get-title مع cookies
+    if has_cookies:
+        attempts.append({
+            "label": "geturl+cookies",
+            "cmd": ["yt-dlp", "--playlist-items", "1",
+                    "--get-url", "--get-title",
+                    "--format", "best[ext=mp4]/best",
+                    "--cookies", COOKIES_FILE,
+                    "--no-warnings", page_url]
+        })
+
+    # محاولة 4: --get-url --get-title بدون cookies
+    attempts.append({
+        "label": "geturl-no-cookies",
+        "cmd": ["yt-dlp", "--playlist-items", "1",
+                "--get-url", "--get-title",
+                "--format", "best[ext=mp4]/best",
+                "--no-warnings", page_url]
+    })
+
+    # محاولة 5: flat-playlist
+    if has_cookies:
+        attempts.append({
+            "label": "flat+cookies",
+            "cmd": ["yt-dlp", "--flat-playlist", "--playlist-items", "1",
+                    "--print", "url",
+                    "--cookies", COOKIES_FILE,
+                    "--no-warnings", page_url]
+        })
+
+    for att in attempts:
+        print(f"  ⏳ {att['label']}...")
+        try:
+            r = subprocess.run(att["cmd"], capture_output=True, text=True, timeout=120)
+            lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
+            if r.returncode != 0:
+                print(f"    ⚠️ exit={r.returncode}: {r.stderr.strip()[-120:]}")
+
+            if len(lines) >= 2:
+                url   = lines[0] if lines[0].startswith("http") else lines[1]
+                title = clean_title(lines[1] if lines[0].startswith("http") else lines[0])
+                if url.startswith("http"):
+                    print(f"  ✅ {title[:70]}")
+                    return url, title
+
+            elif len(lines) == 1 and lines[0].startswith("http"):
+                print(f"  ✅ (رابط فقط بدون عنوان)")
+                return lines[0], "بدون عنوان"
+
+        except subprocess.TimeoutExpired:
+            print(f"    ⏰ timeout")
+        except Exception as e:
+            print(f"    ❌ {e}")
+
+    print("  ❌ فشلت جميع المحاولات")
     return None, None
 
 def download_video(url):
     out = "/tmp/main.mp4"
-    for use_cookies in [False, True]:
-        print(f"📥 {'(كوكيز)' if use_cookies else '(مباشر)'}...")
-        cmd = ["yt-dlp", "-o", out, "--format", "best[ext=mp4]/best",
-               "--no-warnings", "--no-playlist"]
-        if use_cookies and os.path.exists(COOKIES_FILE):
-            cmd += ["--cookies", COOKIES_FILE]
-        cmd.append(url)
-        subprocess.run(cmd, timeout=300)
-        if os.path.exists(out) and os.path.getsize(out) > 10000:
-            print(f"  ✅ {os.path.getsize(out)//1024} KB"); return True
-        if os.path.exists(out): os.remove(out)
+    has_cookies = os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 50
+    attempts = []
+
+    if has_cookies:
+        attempts.append(("cookies+mp4",
+            ["yt-dlp", "-o", out, "--format", "best[ext=mp4]/best",
+             "--cookies", COOKIES_FILE, "--no-warnings", "--no-playlist", url]))
+
+    attempts.append(("direct+mp4",
+        ["yt-dlp", "-o", out, "--format", "best[ext=mp4]/best",
+         "--no-warnings", "--no-playlist", url]))
+
+    attempts.append(("direct+best",
+        ["yt-dlp", "-o", out, "--format", "best",
+         "--no-warnings", "--no-playlist", url]))
+
+    # إذا كان الرابط مباشراً (CDN) حاول wget
+    if "fbcdn" in url or url.endswith(".mp4"):
+        attempts.append(("wget-direct", None))  # special
+
+    for label, cmd in attempts:
+        print(f"📥 {label}...")
+        try:
+            if label == "wget-direct":
+                subprocess.run(["wget", "-q", "-O", out, url], timeout=300)
+            else:
+                subprocess.run(cmd, timeout=300)
+            if os.path.exists(out) and os.path.getsize(out) > 10000:
+                print(f"  ✅ {os.path.getsize(out)//1024} KB"); return True
+            if os.path.exists(out): os.remove(out)
+        except subprocess.TimeoutExpired:
+            print(f"  ⏰ timeout")
+        except Exception as e:
+            print(f"  ❌ {e}")
+
     print("❌ فشل التحميل"); return False
 
 def get_video_info(path):
@@ -357,23 +424,27 @@ sources     = config.get("sources", [])
 
 print(f"📋 الصفحات: {[p['name'] for p in target_pubs]}")
 
-if not sources:
-    print("❌ لا توجد sources في config.json"); exit(1)
-
-# 1. جلب آخر فيديو من الصفحة
-source    = sources[0]
-page_url  = source["url"]
-video_url, video_title = fetch_latest_from_page(page_url)
+# ─── دعم رابط مباشر من واجهة PHP ──────────────────────────
+if VIDEO_URL_INPUT:
+    print(f"🔗 رابط مباشر من الواجهة: {VIDEO_URL_INPUT[:80]}")
+    video_url   = VIDEO_URL_INPUT
+    video_title = os.environ.get("VIDEO_TITLE", "بدون عنوان").strip()
+else:
+    if not sources:
+        print("❌ لا توجد sources في config.json"); exit(1)
+    source    = sources[0]
+    page_url  = source["url"]
+    video_url, video_title = fetch_latest_from_page(page_url)
 
 if not video_url:
     print("❌ فشل جلب الفيديو"); exit(1)
 
 print(f"✏️  العنوان: {video_title}")
 
-# 2. تحميل الفيديو
+# تحميل الفيديو
 if not download_video(video_url): exit(1)
 
-# 3. معلومات وتحجيم
+# معلومات وتحجيم
 src_w, src_h, dur = get_video_info("/tmp/main.mp4")
 print(f"📏 {src_w}×{src_h} | {dur:.1f}s")
 
@@ -384,7 +455,6 @@ if src_w != TARGET_W or src_h != TARGET_H:
 
 W, H = TARGET_W, TARGET_H
 
-# 4. معالجة كل Publisher
 print(f"\n🏭 معالجة {len(target_pubs)} صفحة...\n" + "─"*40)
 
 success = 0
@@ -394,7 +464,7 @@ for pub in target_pubs:
     print(f"\n📺 {name}")
     current = main_ready
 
-    # ── PNG Frame ──────────────────────────────────────────────
+    # PNG Frame
     frame_local = f"/tmp/frame_{name}.png"
     framed_out  = f"/tmp/framed_{name}.mp4"
     if download_from_cloudinary(pub["frame_png_id"], frame_local, resource_type="image"):
@@ -403,20 +473,20 @@ for pub in target_pubs:
     else:
         print(f"  ⚠️ PNG Frame غير متاح — سيُنشر بدونه")
 
-    # ── شريط العنوان ───────────────────────────────────────────
+    # شريط العنوان
     title_png  = render_title_overlay(video_title, color, W, H)
     titled_out = f"/tmp/titled_{name}.mp4"
     if apply_title_overlay(current, title_png, titled_out, dur):
         current = titled_out
 
-    # ── Outro ──────────────────────────────────────────────────
+    # Outro
     outro_in  = f"/tmp/outro_{name}.mp4"
     final_out = f"/tmp/final_{name}.mp4"
     if download_from_cloudinary(pub["outro_id"], outro_in):
         if add_outro(current, outro_in, final_out, W, H):
             current = final_out
 
-    # ── رفع وإرسال ─────────────────────────────────────────────
+    # رفع وإرسال
     try:
         compress_and_upload(current, name, video_title, video_url)
         success += 1
