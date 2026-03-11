@@ -3,42 +3,21 @@ name: FB Video Bot — Manual
 on:
   workflow_dispatch:
     inputs:
-      video_url:
-        description: '🔗 رابط الفيديو (Facebook Reel)'
-        required: true
-        type: string
-      title:
-        description: '✏️ عنوان الفيديو'
-        required: true
-        type: string
-      location:
-        description: '📍 المكان'
-        required: false
-        default: ''
-        type: string
-      date:
-        description: '📅 التاريخ'
-        required: false
-        default: ''
-        type: string
-      visibility:
-        description: '🔒 نوع الفيديو'
-        required: false
-        default: 'متداول'
-        type: choice
-        options:
-          - متداول
-          - خاص
       publisher:
         description: '👤 الناشر (ALL = جميع الصفحات)'
         required: false
         default: 'ALL'
-        type: string
+        type: choice
+        options:
+          - ALL
+          - m4
+          - ici
+          - chouf
 
 jobs:
   process-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -53,14 +32,6 @@ jobs:
         run: |
           pip install yt-dlp cloudinary requests Pillow
 
-      - name: Download Montserrat-Arabic font
-        run: |
-          if [ ! -f "Montserrat-Arabic-Bold.ttf" ]; then
-            wget -q -O Montserrat-Arabic-Bold.ttf \
-              "https://raw.githubusercontent.com/typeagm/Montserrat-Arabic/master/fonts/Montserrat-Arabic-Bold.ttf" \
-              || echo "Font not downloaded, will use system font"
-          fi
-
       - name: Write cookies file
         run: |
           if [ -n "${{ secrets.FB_COOKIES }}" ]; then
@@ -72,11 +43,6 @@ jobs:
 
       - name: Process and publish video
         env:
-          VIDEO_URL:             ${{ github.event.inputs.video_url }}
-          VIDEO_TITLE:           ${{ github.event.inputs.title }}
-          VIDEO_LOCATION:        ${{ github.event.inputs.location }}
-          VIDEO_DATE:            ${{ github.event.inputs.date }}
-          VIDEO_VISIBILITY:      ${{ github.event.inputs.visibility }}
           VIDEO_PUBLISHER:       ${{ github.event.inputs.publisher }}
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY:    ${{ secrets.CLOUDINARY_API_KEY }}
