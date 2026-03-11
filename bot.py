@@ -96,47 +96,69 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
     info_sz = max(30, int(W * 0.034))
     font_i  = load_font(info_sz)
 
-    # ── دوال رسم أيقونات flat بـ PIL (بدون emoji) ─────────────
+    # ── دوال رسم أيقونات flat أنيقة بـ PIL (بدون emoji) ────────
     def draw_icon_location(d, cx, cy, r, color):
-        """📍 دبوس الموقع: دائرة + مثلث أسفل"""
-        # الجسم (شكل الدبوس العلوي)
-        d.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color)
-        # المثلث السفلي
-        tip_y = cy + r + int(r * 1.1)
+        """دبوس موقع أنيق: شكل teardrop نظيف"""
+        # الجسم العلوي — دائرة كبيرة
+        d.ellipse([cx-r, cy-r*1.1, cx+r, cy+r*0.3], fill=color)
+        # الذيل السفلي المدبّب
+        tip_y = int(cy + r * 1.6)
+        hw = int(r * 0.52)
+        base_y = int(cy + r * 0.15)
         d.polygon([
-            (cx - int(r*0.55), cy + int(r*0.4)),
-            (cx + int(r*0.55), cy + int(r*0.4)),
-            (cx, tip_y)
+            (cx - hw, base_y),
+            (cx + hw, base_y),
+            (cx,      tip_y),
         ], fill=color)
-        # دائرة بيضاء صغيرة في المنتصف
-        ir = max(3, int(r * 0.38))
-        d.ellipse([cx-ir, cy-ir, cx+ir, cy+ir], fill=(255,255,255,220))
+        # ثقب دائري أبيض في المنتصف (يعطي شكل الدبوس)
+        ir = max(3, int(r * 0.42))
+        d.ellipse([cx-ir, cy-ir*1.1-int(r*0.35),
+                   cx+ir, cy+ir*0.9-int(r*0.35)],
+                  fill=(0, 0, 0, 0))
 
     def draw_icon_calendar(d, cx, cy, r, color):
-        """📅 تقويم: مستطيل + خطوط شبكة"""
-        # الإطار الخارجي
-        x0, y0 = cx - r, cy - int(r * 0.75)
-        x1, y1 = cx + r, cy + int(r * 0.95)
-        rad = max(2, int(r * 0.18))
+        """تقويم نظيف: إطار + خط فاصل + 6 نقاط"""
+        lw   = max(2, int(r * 0.13))   # سُمك الخطوط
+        x0   = cx - r
+        x1   = cx + r
+        y0   = cy - int(r * 0.85)
+        y1   = cy + int(r * 0.95)
+        rad  = max(3, int(r * 0.2))
+        hh   = int((y1 - y0) * 0.30)  # ارتفاع الهيدر
+
+        # الخلفية الكاملة
         d.rounded_rectangle([x0, y0, x1, y1], radius=rad, fill=color)
-        # شريط العنوان الداكن
-        header_h = int((y1 - y0) * 0.32)
-        d.rounded_rectangle([x0, y0, x1, y0 + header_h], radius=rad, fill=(255,255,255,60))
-        # نقطتا الربط أعلى
-        hook_r = max(2, int(r * 0.13))
-        for hx in [cx - int(r*0.45), cx + int(r*0.45)]:
-            d.ellipse([hx-hook_r, y0-hook_r, hx+hook_r, y0+hook_r], fill=(255,255,255,200))
-        # نقاط شبكة التقويم (3×2)
-        dot_r = max(2, int(r * 0.10))
-        grid_y0 = y0 + header_h + int((y1-y0-header_h)*0.25)
-        row_gap = int((y1 - grid_y0) * 0.45)
-        col_gap = int((x1 - x0) / 3.5)
-        for row in range(2):
-            for col in range(3):
-                gx = x0 + int((x1-x0)*0.18) + col * col_gap
-                gy = grid_y0 + row * row_gap
+
+        # الهيدر الداكن (أعمق قليلاً)
+        hc = tuple(max(0, c - 40) if i < 3 else c for i, c in enumerate(color))
+        d.rounded_rectangle([x0, y0, x1, y0+hh], radius=rad, fill=hc)
+
+        # خط فاصل
+        d.line([(x0, y0+hh), (x1, y0+hh)], fill=(255,255,255,80), width=lw)
+
+        # ربطتان أعلى الهيدر
+        pk_r = max(2, int(r*0.12))
+        pk_y = y0
+        for px in [cx - int(r*0.42), cx + int(r*0.42)]:
+            d.rounded_rectangle(
+                [px-pk_r, pk_y-int(pk_r*1.8), px+pk_r, pk_y+int(pk_r*0.6)],
+                radius=pk_r, fill=(255,255,255,210)
+            )
+
+        # 6 نقاط دائرية (3×2) تمثل أيام
+        dot_r  = max(2, int(r * 0.11))
+        cols   = 3
+        rows   = 2
+        gx0    = x0 + int((x1-x0)*0.17)
+        gy0    = y0 + hh + int((y1-y0-hh)*0.22)
+        col_sp = int((x1-x0)*0.63 / (cols-1))
+        row_sp = int((y1-y0-hh)*0.52)
+        for row in range(rows):
+            for col in range(cols):
+                gx = gx0 + col * col_sp
+                gy = gy0 + row * row_sp
                 d.ellipse([gx-dot_r, gy-dot_r, gx+dot_r, gy+dot_r],
-                          fill=(255,255,255,200))
+                          fill=(255,255,255,220))
 
     # ── رسم كل سطر مع أيقونته على اليمين (RTL) ────────────────
     info_items = []
