@@ -27,7 +27,7 @@ on:
 jobs:
   process-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
