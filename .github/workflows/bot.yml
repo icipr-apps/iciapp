@@ -46,6 +46,7 @@ on:
           - m4
           - ici
           - chouf
+          - chouf2
 
 jobs:
   process-video:
