@@ -11,9 +11,14 @@ cloudinary.config(
     api_secret = os.environ["CLOUDINARY_API_SECRET"],
 )
 
-VIDEO_PUBLISHER = os.environ.get("VIDEO_PUBLISHER", "ALL").strip()
-VIDEO_URL_INPUT = os.environ.get("VIDEO_URL", "").strip()
-print(f"👤 {VIDEO_PUBLISHER}")
+VIDEO_PUBLISHER  = os.environ.get("VIDEO_PUBLISHER",  "ALL").strip()
+VIDEO_URL_INPUT  = os.environ.get("VIDEO_URL",         "").strip()
+VIDEO_TITLE_INPUT= os.environ.get("VIDEO_TITLE",       "").strip()
+VIDEO_LOCATION   = os.environ.get("VIDEO_LOCATION",    "").strip()
+VIDEO_DATE       = os.environ.get("VIDEO_DATE",        "").strip()
+VIDEO_VISIBILITY = os.environ.get("VIDEO_VISIBILITY",  "متداول").strip()
+VIDEO_SOURCE     = os.environ.get("VIDEO_SOURCE",      "").strip()
+print(f"👤 {VIDEO_PUBLISHER} | 📍 {VIDEO_LOCATION or '—'} | 📅 {VIDEO_DATE or '—'} | 🔒 {VIDEO_VISIBILITY}")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -54,17 +59,74 @@ def wrap_text(draw, text, font, max_w):
 
 
 # ══════════════════════════════════════════════════════════════
-#   رسم شريط العنوان (PNG شفاف)
+#   رسم الـ Overlay الكامل — مقسّم إلى ملفين:
+#
+#   overlay_permanent.png ← مكان + تاريخ + متداول/خاص
+#                            يظهر fade-in ويبقى طول الفيديو
+#
+#   overlay_title.png     ← شريط العنوان فقط
+#                            يظهر fade-in ويختفي بعد 12 ثانية
+#
+#   التصميم:
+#   ┌─────────────────────────────────────────────┐
+#   │ 📍 تافرطة، بجاية        [أعلى يسار]        │
+#   │ 📅 2026-03-11                               │
+#   │                                             │
+#   │           محتوى الفيديو                     │
+#   │                                             │
+#   │ متداول ← نص عمودي أقصى اليسار              │
+#   │                                             │
+#   │ ████████ عنوان الفيديو ████████             │ ← يختفي بعد 12s
+#   └─────────────────────────────────────────────┘
 # ══════════════════════════════════════════════════════════════
 
-def render_title_overlay(title, color_hex, W, H):
+def render_overlay(title, location, date_str, visibility, color_hex, W, H):
     from PIL import Image, ImageDraw
-    white    = (255, 255, 255, 255)
+    white   = (255, 255, 255, 255)
+    shadow  = (0, 0, 0, 160)
+    pad     = int(W * 0.04)
+
     hex_str  = color_hex.replace("0x","").replace("#","")
     title_bg = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), 217)
 
-    img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+    # ── Overlay 1: دائم (مكان + تاريخ + متداول) ───────────────
+    img_perm  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw_perm = ImageDraw.Draw(img_perm)
+
+    info_sz = max(30, int(W * 0.034))
+    font_i  = load_font(info_sz)
+
+    info_lines = []
+    if location: info_lines.append(f"📍 {location}")
+    if date_str: info_lines.append(f"📅 {date_str}")
+
+    y = int(H * 0.08)
+    for line in info_lines:
+        lw, lh = get_tw(draw_perm, line, font_i)
+        # ظل خفيف للقراءة على أي خلفية
+        draw_perm.text((pad+2, y+2), line, font=font_i, fill=shadow)
+        draw_perm.text((pad,   y),   line, font=font_i, fill=white)
+        y += lh + int(info_sz * 0.45)
+
+    # متداول / خاص عمودي أقصى اليسار
+    if visibility:
+        badge_sz = max(26, int(W * 0.030))
+        font_b   = load_font(badge_sz)
+        bw, bh   = get_tw(draw_perm, visibility, font_b)
+        margin   = int(badge_sz * 0.35)
+        tmp      = Image.new("RGBA", (bw + margin*2, bh + margin*2), (0, 0, 0, 0))
+        td       = ImageDraw.Draw(tmp)
+        td.text((margin+1, margin+1), visibility, font=font_b, fill=shadow)
+        td.text((margin,   margin),   visibility, font=font_b, fill=white)
+        rotated  = tmp.rotate(90, expand=True)
+        img_perm.paste(rotated, (4, (H - rotated.height) // 2), rotated)
+
+    img_perm.save("/tmp/overlay_permanent.png", "PNG")
+    print("✅ overlay_permanent.png")
+
+    # ── Overlay 2: شريط العنوان فقط ───────────────────────────
+    img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw_title = ImageDraw.Draw(img_title)
 
     if title:
         font_size = max(20, int(W * 0.042))
@@ -74,24 +136,23 @@ def render_title_overlay(title, color_hex, W, H):
         bar_w     = W - int(W * 0.25)
         usable    = bar_w - 2 * pad_h
 
-        lines  = wrap_text(draw, title, font_t, usable)
+        lines  = wrap_text(draw_title, title, font_t, usable)
         line_h = int(font_size * 1.5)
         bar_h  = len(lines) * line_h + 2 * pad_v
         bar_x  = (W - bar_w) // 2
         bar_y  = H - bar_h - int(H * 0.22)
 
-        draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
+        draw_title.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
         for i, line in enumerate(lines):
-            lw, _ = get_tw(draw, line, font_t)
+            lw, _ = get_tw(draw_title, line, font_t)
             tx = bar_x + (bar_w - lw) // 2
             ty = bar_y + pad_v + i * line_h
-            draw.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
-            draw.text((tx,   ty),   line, font=font_t, fill=white)
+            draw_title.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
+            draw_title.text((tx,   ty),   line, font=font_t, fill=white)
 
-    out = "/tmp/overlay_title.png"
-    img.save(out, "PNG")
+    img_title.save("/tmp/overlay_title.png", "PNG")
     print("✅ overlay_title.png")
-    return out
+    return "/tmp/overlay_title.png"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -115,34 +176,69 @@ def apply_png_frame(main, frame_png, out, W, H):
 
 
 # ══════════════════════════════════════════════════════════════
-#   شريط العنوان (fade-in ثم يختفي بعد 12 ثانية)
+#   تطبيق الـ Overlay — ملفان:
+#   permanent: يظهر fade-in ويبقى حتى النهاية
+#   title:     يظهر fade-in ثم يختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
 
-def apply_title_overlay(main, title_png, out, dur):
-    print("✍️  شريط العنوان (يختفي بعد 12s)...")
-    loop_dur   = dur + 2
+def apply_overlay(main, out, dur):
+    print("✍️  تطبيق الـ Overlay...")
+    perm_png  = "/tmp/overlay_permanent.png"
+    title_png = "/tmp/overlay_title.png"
+    loop_dur  = dur + 2
     show_start = 1.2
     fade_in    = 0.8
     title_hide = 12.0
     fade_out   = 0.6
 
-    fc = (
-        f"[1:v]format=yuva420p,"
-        f"fade=t=in:st={show_start}:d={fade_in}:alpha=1,"
-        f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
-        f"[0:v][ttl]overlay=0:0[v]"
-    )
-    for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
-        subprocess.run(
-            ["ffmpeg", "-y", "-threads", "2", "-i", main,
-             "-loop", "1", "-t", str(loop_dur), "-i", title_png,
-             "-filter_complex", fc,
-             *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast","-shortest", out],
-            capture_output=True, text=True, timeout=600
+    has_perm  = os.path.exists(perm_png)
+    has_title = os.path.exists(title_png)
+
+    if has_perm and has_title:
+        fc = (
+            f"[1:v]format=yuva420p,"
+            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[perm];"
+            f"[2:v]format=yuva420p,"
+            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1,"
+            f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
+            f"[0:v][perm]overlay=0:0[tmp];"
+            f"[tmp][ttl]overlay=0:0[v]"
         )
-        if os.path.exists(out) and os.path.getsize(out) > 1000:
-            print("  ✅"); return True
-        if os.path.exists(out): os.remove(out)
+        for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
+            subprocess.run(
+                ["ffmpeg", "-y", "-threads", "2",
+                 "-i", main,
+                 "-loop","1","-t",str(loop_dur),"-i", perm_png,
+                 "-loop","1","-t",str(loop_dur),"-i", title_png,
+                 "-filter_complex", fc,
+                 *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast","-shortest", out],
+                capture_output=True, text=True, timeout=600
+            )
+            if os.path.exists(out) and os.path.getsize(out) > 1000:
+                print("  ✅ (split overlay)"); return True
+            if os.path.exists(out): os.remove(out)
+
+    # Fallback: title فقط
+    if has_title:
+        fc2 = (
+            f"[1:v]format=yuva420p,"
+            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1,"
+            f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
+            f"[0:v][ttl]overlay=0:0[v]"
+        )
+        for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
+            subprocess.run(
+                ["ffmpeg", "-y", "-threads", "2",
+                 "-i", main,
+                 "-loop","1","-t",str(loop_dur),"-i", title_png,
+                 "-filter_complex", fc2,
+                 *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast","-shortest", out],
+                capture_output=True, text=True, timeout=600
+            )
+            if os.path.exists(out) and os.path.getsize(out) > 1000:
+                print("  ✅ (title only)"); return True
+            if os.path.exists(out): os.remove(out)
+
     print("  ❌"); return False
 
 
@@ -389,7 +485,8 @@ def cleanup_pub(name):
 
 def cleanup_global():
     for f in ["/tmp/main.mp4", "/tmp/main_scaled.mp4",
-              "/tmp/overlay_title.png", "/tmp/concat.txt"]:
+              "/tmp/overlay_permanent.png", "/tmp/overlay_title.png",
+              "/tmp/concat.txt"]:
         if os.path.exists(f): os.remove(f)
 
 
@@ -411,7 +508,7 @@ print(f"📋 الصفحات: {[p['name'] for p in target_pubs]}")
 if VIDEO_URL_INPUT:
     print(f"🔗 رابط مباشر من الواجهة: {VIDEO_URL_INPUT[:80]}")
     video_url   = VIDEO_URL_INPUT
-    video_title = os.environ.get("VIDEO_TITLE", "بدون عنوان").strip()
+    video_title = VIDEO_TITLE_INPUT or "بدون عنوان"
 else:
     if not sources:
         print("❌ لا توجد sources في config.json"); exit(1)
@@ -456,10 +553,10 @@ for pub in target_pubs:
     else:
         print(f"  ⚠️ PNG Frame غير متاح — سيُنشر بدونه")
 
-    # ── شريط العنوان بلون خاص بكل publisher ──────────────────
-    title_png  = render_title_overlay(video_title, color, W, H)
+    # ── رسم وتطبيق الـ Overlay الكامل (عنوان + مكان + تاريخ + متداول) ──
+    render_overlay(video_title, VIDEO_LOCATION, VIDEO_DATE, VIDEO_VISIBILITY, color, W, H)
     titled_out = f"/tmp/titled_{name}.mp4"
-    if apply_title_overlay(current, title_png, titled_out, dur):
+    if apply_overlay(current, titled_out, dur):
         current = titled_out
 
     # ── Outro خاص بكل publisher ───────────────────────────────
