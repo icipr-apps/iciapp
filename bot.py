@@ -96,17 +96,77 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
     info_sz = max(30, int(W * 0.034))
     font_i  = load_font(info_sz)
 
-    info_lines = []
-    if location: info_lines.append(f"📍 {location}")
-    if date_str: info_lines.append(f"📅 {date_str}")
+    # ── دوال رسم أيقونات flat بـ PIL (بدون emoji) ─────────────
+    def draw_icon_location(d, cx, cy, r, color):
+        """📍 دبوس الموقع: دائرة + مثلث أسفل"""
+        # الجسم (شكل الدبوس العلوي)
+        d.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color)
+        # المثلث السفلي
+        tip_y = cy + r + int(r * 1.1)
+        d.polygon([
+            (cx - int(r*0.55), cy + int(r*0.4)),
+            (cx + int(r*0.55), cy + int(r*0.4)),
+            (cx, tip_y)
+        ], fill=color)
+        # دائرة بيضاء صغيرة في المنتصف
+        ir = max(3, int(r * 0.38))
+        d.ellipse([cx-ir, cy-ir, cx+ir, cy+ir], fill=(255,255,255,220))
 
-    y = int(H * 0.08)
-    for line in info_lines:
-        lw, lh = get_tw(draw_perm, line, font_i)
-        # ظل خفيف للقراءة على أي خلفية
-        draw_perm.text((pad+2, y+2), line, font=font_i, fill=shadow)
-        draw_perm.text((pad,   y),   line, font=font_i, fill=white)
-        y += lh + int(info_sz * 0.45)
+    def draw_icon_calendar(d, cx, cy, r, color):
+        """📅 تقويم: مستطيل + خطوط شبكة"""
+        # الإطار الخارجي
+        x0, y0 = cx - r, cy - int(r * 0.75)
+        x1, y1 = cx + r, cy + int(r * 0.95)
+        rad = max(2, int(r * 0.18))
+        d.rounded_rectangle([x0, y0, x1, y1], radius=rad, fill=color)
+        # شريط العنوان الداكن
+        header_h = int((y1 - y0) * 0.32)
+        d.rounded_rectangle([x0, y0, x1, y0 + header_h], radius=rad, fill=(255,255,255,60))
+        # نقطتا الربط أعلى
+        hook_r = max(2, int(r * 0.13))
+        for hx in [cx - int(r*0.45), cx + int(r*0.45)]:
+            d.ellipse([hx-hook_r, y0-hook_r, hx+hook_r, y0+hook_r], fill=(255,255,255,200))
+        # نقاط شبكة التقويم (3×2)
+        dot_r = max(2, int(r * 0.10))
+        grid_y0 = y0 + header_h + int((y1-y0-header_h)*0.25)
+        row_gap = int((y1 - grid_y0) * 0.45)
+        col_gap = int((x1 - x0) / 3.5)
+        for row in range(2):
+            for col in range(3):
+                gx = x0 + int((x1-x0)*0.18) + col * col_gap
+                gy = grid_y0 + row * row_gap
+                d.ellipse([gx-dot_r, gy-dot_r, gx+dot_r, gy+dot_r],
+                          fill=(255,255,255,200))
+
+    # ── رسم كل سطر مع أيقونته على اليمين (RTL) ────────────────
+    info_items = []
+    if location: info_items.append(("location", location))
+    if date_str: info_items.append(("date",     date_str))
+
+    icon_sz  = int(info_sz * 0.72)   # حجم الأيقونة
+    icon_gap = int(info_sz * 0.45)   # مسافة بين الأيقونة والنص
+    y = int(H * 0.13)                # ← أنزل قليلاً (كان 0.08)
+
+    for kind, text in info_items:
+        tw, th = get_tw(draw_perm, text, font_i)
+        lh     = th
+
+        # موضع الأيقونة: يمين النص (RTL — pad من اليسار)
+        icon_cx = pad + icon_sz
+        icon_cy = y + lh // 2
+        text_x  = pad + icon_sz * 2 + icon_gap
+
+        # ظل النص
+        draw_perm.text((text_x+2, y+2), text, font=font_i, fill=shadow)
+        draw_perm.text((text_x,   y),   text, font=font_i, fill=white)
+
+        # رسم الأيقونة
+        if kind == "location":
+            draw_icon_location(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
+        else:
+            draw_icon_calendar(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
+
+        y += lh + int(info_sz * 0.55)
 
     # متداول / خاص عمودي أقصى اليسار
     if visibility:
