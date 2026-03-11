@@ -1,8 +1,8 @@
 import os, json, subprocess, re, cloudinary, cloudinary.uploader, requests, time
 
 # ─── إعدادات ────────────────────────────────────────────────
-COOKIES_FILE = "/tmp/cookies.txt"
-WEBHOOK_URL  = os.environ["WEBHOOK_URL"]
+COOKIES_FILE   = "/tmp/cookies.txt"
+WEBHOOK_URL    = os.environ["WEBHOOK_URL"]
 TARGET_W, TARGET_H = 1080, 1920
 
 cloudinary.config(
@@ -11,25 +11,12 @@ cloudinary.config(
     api_secret = os.environ["CLOUDINARY_API_SECRET"],
 )
 
-VIDEO_URL        = os.environ.get("VIDEO_URL", "").strip()
-VIDEO_TITLE      = os.environ.get("VIDEO_TITLE", "").strip()
-VIDEO_LOCATION   = os.environ.get("VIDEO_LOCATION", "").strip()
-VIDEO_DATE       = os.environ.get("VIDEO_DATE", "").strip()
-VIDEO_VISIBILITY = os.environ.get("VIDEO_VISIBILITY", "متداول").strip()
-VIDEO_PUBLISHER  = os.environ.get("VIDEO_PUBLISHER", "ALL").strip()
-
-if not VIDEO_URL:
-    print("❌ VIDEO_URL مطلوب"); exit(1)
-if not VIDEO_TITLE:
-    print("❌ VIDEO_TITLE مطلوب"); exit(1)
-
-print(f"🎬 {VIDEO_URL}")
-print(f"✏️  {VIDEO_TITLE}")
-print(f"📍 {VIDEO_LOCATION or '—'}  📅 {VIDEO_DATE or '—'}  🔒 {VIDEO_VISIBILITY}  👤 {VIDEO_PUBLISHER}")
+VIDEO_PUBLISHER = os.environ.get("VIDEO_PUBLISHER", "ALL").strip()
+print(f"👤 {VIDEO_PUBLISHER}")
 
 
 # ══════════════════════════════════════════════════════════════
-#   خط Montserrat-Arabic يعالج العربية مباشرة — بدون أي مكتبة
+#   خط Montserrat-Arabic
 # ══════════════════════════════════════════════════════════════
 
 def load_font(size):
@@ -44,19 +31,14 @@ def load_font(size):
                 f = ImageFont.truetype(path, size)
                 print(f"  ✅ خط: {os.path.basename(path)} ({size}px)")
                 return f
-            except:
-                continue
-    print(f"  ⚠️ خط افتراضي ({size}px)")
+            except: continue
     return ImageFont.load_default()
-
 
 def get_tw(draw, text, font):
     bb = draw.textbbox((0, 0), text, font=font)
     return bb[2] - bb[0], bb[3] - bb[1]
 
-
 def wrap_text(draw, text, font, max_w):
-    """تقسيم النص إلى أسطر حسب العرض الأقصى."""
     words = text.split()
     lines, current = [], []
     for word in words:
@@ -64,84 +46,24 @@ def wrap_text(draw, text, font, max_w):
         if get_tw(draw, test, font)[0] <= max_w:
             current.append(word)
         else:
-            if current:
-                lines.append(" ".join(current))
+            if current: lines.append(" ".join(current))
             current = [word]
-    if current:
-        lines.append(" ".join(current))
+    if current: lines.append(" ".join(current))
     return lines if lines else [text]
 
 
 # ══════════════════════════════════════════════════════════════
-#   رسم الـ Overlay الكامل
-#
-#   التصميم:
-#   ┌─────────────────────────────────────────────┐
-#   │ طابرلا                  [بدون خلفية]        │  ← أعلى يسار
-#   │ 2026-03-08                                  │
-#   │                                             │
-#   │           محتوى الفيديو                     │
-#   │                                             │
-#   │متداول  ← نص ملوّن عمودي أقصى اليسار        │  ← بدون خلفية
-#   │                                             │
-#   │ █████████ شريط العنوان ████████████        │  ← فوق منطقة GS بـ 22%
-#   │         عنوان الفيديو                       │
-#   └─────────────────────────────────────────────┘
+#   رسم شريط العنوان (PNG شفاف)
 # ══════════════════════════════════════════════════════════════
 
-def render_overlay(title, location, date_str, visibility, color_hex, W, H):
-    """
-    يرسم overlay مقسّم إلى ملفين:
-      /tmp/overlay_permanent.png  ← المكان + التاريخ + متداول (يبقى طول الفيديو)
-      /tmp/overlay_title.png      ← شريط العنوان فقط (يختفي بعد 12 ثانية)
-    ويُعيد مسار الملف الكامل القديم للتوافق.
-    """
+def render_title_overlay(title, color_hex, W, H):
     from PIL import Image, ImageDraw
+    white    = (255, 255, 255, 255)
+    hex_str  = color_hex.replace("0x","").replace("#","")
+    title_bg = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), 217)
 
-    white = (255, 255, 255, 255)
-    pad   = int(W * 0.04)
-
-    # لون شريط العنوان
-    hex_str   = color_hex.split("@")[0].replace("0x", "").replace("#", "")
-    alpha_val = int(float(color_hex.split("@")[1]) * 255) if "@" in color_hex else 217
-    title_bg  = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), alpha_val)
-
-    # ── Overlay 1: العناصر الدائمة (مكان + تاريخ + متداول) ────────
-    img_perm  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw_perm = ImageDraw.Draw(img_perm)
-
-    info_sz = max(32, int(W * 0.036))
-    font_i  = load_font(info_sz)
-
-    info_lines = []
-    if location: info_lines.append(location)
-    if date_str: info_lines.append(date_str)
-
-    # ← تنزيل المكان/التاريخ للأسفل بمقدار 8% من الارتفاع
-    y = int(H * 0.08)
-    for line in info_lines:
-        lw, lh = get_tw(draw_perm, line, font_i)
-        draw_perm.text((pad, y), line, font=font_i, fill=white)
-        y += lh + int(info_sz * 0.4)
-
-    # متداول / خاص عمودي
-    if visibility:
-        badge_sz = max(28, int(W * 0.032))
-        font_b   = load_font(badge_sz)
-        bw, bh   = get_tw(draw_perm, visibility, font_b)
-        margin   = int(badge_sz * 0.3)
-        tmp      = Image.new("RGBA", (bw + margin*2, bh + margin*2), (0, 0, 0, 0))
-        td       = ImageDraw.Draw(tmp)
-        td.text((margin, margin), visibility, font=font_b, fill=white)
-        rotated  = tmp.rotate(90, expand=True)
-        img_perm.paste(rotated, (4, (H - rotated.height) // 2), rotated)
-
-    img_perm.save("/tmp/overlay_permanent.png", "PNG")
-    print("✅ overlay_permanent.png")
-
-    # ── Overlay 2: شريط العنوان فقط ────────────────────────────────
-    img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw_title = ImageDraw.Draw(img_title)
+    img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
 
     if title:
         font_size = max(20, int(W * 0.0352))
@@ -151,96 +73,77 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
         bar_w     = W - int(W * 0.08)
         usable    = bar_w - 2 * pad_h
 
-        lines  = wrap_text(draw_title, title, font_t, usable)
+        lines  = wrap_text(draw, title, font_t, usable)
         line_h = int(font_size * 1.5)
         bar_h  = len(lines) * line_h + 2 * pad_v
         bar_x  = (W - bar_w) // 2
         bar_y  = H - bar_h - int(H * 0.16)
 
-        draw_title.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
-
+        draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
         for i, line in enumerate(lines):
-            lw, _ = get_tw(draw_title, line, font_t)
-            tx    = bar_x + (bar_w - lw) // 2
-            ty    = bar_y + pad_v + i * line_h
-            draw_title.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
-            draw_title.text((tx,   ty),   line, font=font_t, fill=white)
+            lw, _ = get_tw(draw, line, font_t)
+            tx = bar_x + (bar_w - lw) // 2
+            ty = bar_y + pad_v + i * line_h
+            draw.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
+            draw.text((tx,   ty),   line, font=font_t, fill=white)
 
-    img_title.save("/tmp/overlay_title.png", "PNG")
+    out = "/tmp/overlay_title.png"
+    img.save(out, "PNG")
     print("✅ overlay_title.png")
-
-    # نحفظ أيضاً النسخة الكاملة للتوافق مع الكود القديم
-    combined = Image.alpha_composite(img_perm, img_title)
-    combined.save("/tmp/full_overlay.png", "PNG")
-    print("✅ full_overlay.png")
-    return "/tmp/full_overlay.png"
+    return out
 
 
 # ══════════════════════════════════════════════════════════════
-#   تطبيق الـ Overlay — fade-in فقط، يبقى حتى نهاية الفيديو
+#   تطبيق PNG Frame الشفاف (إطار/بوردر — بدل green screen)
 # ══════════════════════════════════════════════════════════════
 
-def apply_overlay(main, overlay_png, out, video_dur):
-    """
-    يطبّق overlayين:
-      overlay_permanent.png  ← يظهر من الثانية 1.2 ويبقى حتى النهاية
-      overlay_title.png      ← يظهر من الثانية 1.2 ويختفي بعد 12 ثانية (fade-out 0.6s)
-    """
-    print("✍️  تطبيق الـ Overlay (عنوان يختفي بعد 12 ثانية)...")
-
-    perm_png  = "/tmp/overlay_permanent.png"
-    title_png = "/tmp/overlay_title.png"
-    loop_dur  = video_dur + 2
-
-    show_start  = 1.2
-    fade_in     = 0.8
-    title_hide  = 12.0   # ← وقت بدء الاختفاء
-    fade_out    = 0.6    # ← مدة الـ fade-out
-
-    # تحقق من وجود الملفين المنفصلين
-    use_split = (os.path.exists(perm_png) and os.path.exists(title_png))
-
-    if use_split:
-        fc = (
-            # Permanent overlay: fade-in فقط، يبقى حتى النهاية
-            f"[1:v]format=yuva420p,"
-            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[perm];"
-            # Title overlay: fade-in ثم fade-out عند الثانية 12
-            f"[2:v]format=yuva420p,"
-            f"fade=t=in:st={show_start}:d={fade_in}:alpha=1,"
-            f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
-            # دمج الثلاثة
-            f"[0:v][perm]overlay=0:0[tmp];"
-            f"[tmp][ttl]overlay=0:0[v]"
-        )
-        r = subprocess.run(
-            ["ffmpeg", "-y",
-             "-i", main,
-             "-loop", "1", "-t", str(loop_dur), "-i", perm_png,
-             "-loop", "1", "-t", str(loop_dur), "-i", title_png,
+def apply_png_frame(main, frame_png, out, W, H):
+    """يطبّق إطار PNG شفاف فوق الفيديو كاملاً."""
+    print("🖼️  PNG Frame...")
+    fc = f"[1:v]scale={W}:{H}[frm];[0:v][frm]overlay=0:0[v]"
+    for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", main, "-i", frame_png,
              "-filter_complex", fc,
-             "-map", "[v]", "-map", "0:a",
-             "-c:v", "libx264", "-c:a", "copy", "-preset", "fast", "-shortest", out],
+             *maps, "-c:v","libx264","-c:a","copy","-preset","fast", out],
             capture_output=True, text=True, timeout=600
         )
         if os.path.exists(out) and os.path.getsize(out) > 1000:
-            print("  ✅ تم (split overlay)"); return True
-        print(f"  ⚠️ split فشل، تجربة fallback...\n{r.stderr[-200:]}")
+            print("  ✅"); return True
+        if os.path.exists(out): os.remove(out)
+    print("  ❌"); return False
 
-    # Fallback: overlay كامل مع fade-in فقط
-    fc2 = (f"[1:v]format=yuva420p,"
-           f"fade=t=in:st={show_start}:d={fade_in}:alpha=1[ovr];"
-           f"[0:v][ovr]overlay=0:0[v]")
-    r2 = subprocess.run(
-        ["ffmpeg", "-y", "-i", main,
-         "-loop", "1", "-t", str(loop_dur), "-i", overlay_png,
-         "-filter_complex", fc2,
-         "-map", "[v]", "-map", "0:a",
-         "-c:v", "libx264", "-c:a", "copy", "-preset", "fast", "-shortest", out],
-        capture_output=True, text=True, timeout=600
+
+# ══════════════════════════════════════════════════════════════
+#   تطبيق شريط العنوان (fade-in ثم يختفي بعد 12 ثانية)
+# ══════════════════════════════════════════════════════════════
+
+def apply_title_overlay(main, title_png, out, dur):
+    print("✍️  شريط العنوان (يختفي بعد 12s)...")
+    loop_dur   = dur + 2
+    show_start = 1.2
+    fade_in    = 0.8
+    title_hide = 12.0
+    fade_out   = 0.6
+
+    fc = (
+        f"[1:v]format=yuva420p,"
+        f"fade=t=in:st={show_start}:d={fade_in}:alpha=1,"
+        f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
+        f"[0:v][ttl]overlay=0:0[v]"
     )
-    ok = os.path.exists(out) and os.path.getsize(out) > 1000
-    print("  ✅ (fallback)" if ok else f"  ❌\n{r2.stderr[-300:]}"); return ok
+    for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", main,
+             "-loop", "1", "-t", str(loop_dur), "-i", title_png,
+             "-filter_complex", fc,
+             *maps, "-c:v","libx264","-c:a","copy","-preset","fast","-shortest", out],
+            capture_output=True, text=True, timeout=600
+        )
+        if os.path.exists(out) and os.path.getsize(out) > 1000:
+            print("  ✅"); return True
+        if os.path.exists(out): os.remove(out)
+    print("  ❌"); return False
 
 
 # ══════════════════════════════════════════════════════════════
@@ -250,6 +153,55 @@ def apply_overlay(main, overlay_png, out, video_dur):
 def load_config():
     with open("config.json", "r", encoding="utf-8") as f:
         return json.load(f)
+
+def clean_title(raw):
+    parts = [p.strip() for p in raw.split("|")]
+    if len(parts) >= 3: return " | ".join(parts[1:-1]).strip()
+    elif len(parts) == 2: return parts[1].strip()
+    return raw.strip()
+
+def fetch_latest_from_page(page_url):
+    """يجلب رابط وعنوان آخر Reel من صفحة Facebook."""
+    print(f"🔍 جلب آخر فيديو من: {page_url}")
+
+    for use_cookies in [False, True]:
+        cmd = ["yt-dlp", "--playlist-items", "1",
+               "--print", "%(webpage_url)s",
+               "--print", "%(title)s",
+               "--no-warnings"]
+        if use_cookies and os.path.exists(COOKIES_FILE):
+            cmd += ["--cookies", COOKIES_FILE]
+        cmd.append(page_url)
+
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
+
+        if len(lines) >= 2:
+            url   = lines[0] if lines[0].startswith("http") else lines[1]
+            title = clean_title(lines[1] if lines[0].startswith("http") else lines[0])
+            print(f"  ✅ {title[:70]}")
+            return url, title
+
+    # Fallback
+    for use_cookies in [False, True]:
+        cmd = ["yt-dlp", "--playlist-items", "1",
+               "--get-url", "--get-title", "--no-warnings",
+               "--format", "best[ext=mp4]/best"]
+        if use_cookies and os.path.exists(COOKIES_FILE):
+            cmd += ["--cookies", COOKIES_FILE]
+        cmd.append(page_url)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
+        if len(lines) >= 2:
+            title = clean_title(lines[0])
+            url   = lines[-1]
+            print(f"  ✅ (fallback) {title[:60]}")
+            return url, title
+        elif len(lines) == 1 and lines[0].startswith("http"):
+            return lines[0], "بدون عنوان"
+
+    print("  ❌ فشل")
+    return None, None
 
 def download_video(url):
     out = "/tmp/main.mp4"
@@ -290,29 +242,14 @@ def scale_to_target(src, out, tw=1080, th=1920):
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
     print("  ✅" if ok else f"  ❌\n{r.stderr[-200:]}"); return ok
 
-def download_from_cloudinary(public_id, out):
+def download_from_cloudinary(public_id, out, resource_type="video"):
+    ext = "png" if resource_type == "image" else "mp4"
     url = (f"https://res.cloudinary.com/"
-           f"{os.environ['CLOUDINARY_CLOUD_NAME']}/video/upload/{public_id}.mp4")
+           f"{os.environ['CLOUDINARY_CLOUD_NAME']}/{resource_type}/upload/{public_id}.{ext}")
     subprocess.run(["wget", "-q", "-O", out, url], timeout=90)
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
     if not ok: print(f"  ⚠️ فشل: {public_id}")
     return ok
-
-def apply_green_screen(main, gs, out, W, H, dur):
-    print("🎨 Green Screen...")
-    fc = (f"[1:v]trim=duration={dur},scale={W}:{H},"
-          f"colorkey=0x00FF00:0.3:0.1,setpts=PTS-STARTPTS[g];"
-          f"[0:v][g]overlay=0:0[v]")
-    for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", main, "-i", gs, "-filter_complex", fc,
-             *maps, "-c:v","libx264","-c:a","aac","-shortest","-preset","fast", out],
-            capture_output=True, text=True, timeout=600
-        )
-        if os.path.exists(out) and os.path.getsize(out) > 1000:
-            print("  ✅"); return True
-        if os.path.exists(out): os.remove(out)
-    print("  ❌"); return False
 
 def add_outro(main, outro, out, W, H):
     print("🎬 Outro...")
@@ -320,11 +257,11 @@ def add_outro(main, outro, out, W, H):
         ["ffprobe","-v","quiet","-print_format","json","-show_streams","-show_format",outro],
         capture_output=True, text=True
     )
-    has_audio, dur = False, 5
+    has_audio, outro_dur = False, 5
     try:
         info      = json.loads(r.stdout)
         has_audio = any(s["codec_type"]=="audio" for s in info["streams"])
-        dur       = float(info.get("format",{}).get("duration",5))
+        outro_dur = float(info.get("format",{}).get("duration",5))
     except: pass
 
     if has_audio:
@@ -333,7 +270,7 @@ def add_outro(main, outro, out, W, H):
         maps = ["-map","[ov]","-map","[oa]"]
     else:
         fc   = (f"[0:v]scale={W}:{H},setsar=1[v0];[1:v]scale={W}:{H},setsar=1[v1];"
-                f"aevalsrc=0:d={dur}[sl];[v0][0:a][v1][sl]concat=n=2:v=1:a=1[ov][oa]")
+                f"aevalsrc=0:d={outro_dur}[sl];[v0][0:a][v1][sl]concat=n=2:v=1:a=1[ov][oa]")
         maps = ["-map","[ov]","-map","[oa]"]
 
     subprocess.run(
@@ -343,7 +280,7 @@ def add_outro(main, outro, out, W, H):
     )
     if os.path.exists(out) and os.path.getsize(out) > 1000:
         print("  ✅"); return True
-    # Fallback concat
+
     with open("/tmp/concat.txt","w") as f:
         f.write(f"file '{main}'\nfile '{outro}'\n")
     subprocess.run(
@@ -354,39 +291,55 @@ def add_outro(main, outro, out, W, H):
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
     print("  ✅ (concat)" if ok else "  ❌"); return ok
 
-def upload_and_send(video_path, pub_name):
-    print(f"☁️  رفع ({pub_name})...")
-    safe   = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
-    result = cloudinary.uploader.upload(
-        video_path,
-        resource_type="video",
-        public_id=f"final_{safe}_{int(time.time())}",
-        overwrite=False
+def compress_and_upload(video_path, pub_name, title, source_url):
+    compressed = f"/tmp/compressed_{pub_name}.mp4"
+    print("  🗜️  ضغط قبل الرفع...")
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", video_path,
+         "-c:v","libx264","-crf","28","-preset","fast",
+         "-c:a","aac","-b:a","128k","-movflags","+faststart", compressed],
+        capture_output=True, text=True, timeout=600
+    )
+    upload_src = compressed if (os.path.exists(compressed) and os.path.getsize(compressed)>1000) else video_path
+    mb = os.path.getsize(upload_src)/1024/1024
+    print(f"  ✅ {mb:.1f}MB")
+
+    safe      = re.sub(r"[^a-z0-9]","_", pub_name.lower())
+    public_id = f"tmp_{safe}"
+    result    = cloudinary.uploader.upload(
+        upload_src, resource_type="video",
+        public_id=public_id, overwrite=True,
     )
     url = result["secure_url"]
     print(f"  ✅ {url[:70]}")
+
     requests.post(WEBHOOK_URL, json={
         "video_url":  url,
-        "title":      VIDEO_TITLE,
-        "location":   VIDEO_LOCATION,
-        "date":       VIDEO_DATE,
-        "visibility": VIDEO_VISIBILITY,
+        "title":      title,
         "publisher":  pub_name,
-        "source_url": VIDEO_URL,
+        "source_url": source_url,
     }, timeout=30)
     print(f"  📤 Webhook → {pub_name}")
+
+    time.sleep(60)
+    try:
+        cloudinary.uploader.destroy(public_id, resource_type="video")
+        print(f"  🗑️  حُذف — Storage = صفر")
+    except Exception as e:
+        print(f"  ⚠️ فشل الحذف: {e}")
+
+    if os.path.exists(compressed): os.remove(compressed)
     return url
 
 def cleanup_pub(name):
-    for f in [f"/tmp/gs_{name}.mp4", f"/tmp/gs_{name}_done.mp4",
-              f"/tmp/ovr_{name}.mp4", f"/tmp/outro_{name}.mp4", f"/tmp/final_{name}.mp4"]:
+    for f in [f"/tmp/frame_{name}.png", f"/tmp/framed_{name}.mp4",
+              f"/tmp/titled_{name}.mp4", f"/tmp/outro_{name}.mp4",
+              f"/tmp/final_{name}.mp4"]:
         if os.path.exists(f): os.remove(f)
 
 def cleanup_global():
     for f in ["/tmp/main.mp4", "/tmp/main_scaled.mp4",
-              "/tmp/overlaid_base.mp4", "/tmp/full_overlay.png",
-              "/tmp/overlay_permanent.png", "/tmp/overlay_title.png",
-              "/tmp/concat.txt"]:
+              "/tmp/overlay_title.png", "/tmp/concat.txt"]:
         if os.path.exists(f): os.remove(f)
 
 
@@ -400,72 +353,72 @@ config      = load_config()
 all_pubs    = config["publishers"]
 target_pubs = all_pubs if VIDEO_PUBLISHER.upper() == "ALL" else \
               ([p for p in all_pubs if p["name"] == VIDEO_PUBLISHER] or all_pubs)
+sources     = config.get("sources", [])
 
 print(f"📋 الصفحات: {[p['name'] for p in target_pubs]}")
 
-# 1. تحميل الفيديو
-if not download_video(VIDEO_URL): exit(1)
+if not sources:
+    print("❌ لا توجد sources في config.json"); exit(1)
 
-# 2. معلومات وتحجيم
+# 1. جلب آخر فيديو من الصفحة
+source    = sources[0]
+page_url  = source["url"]
+video_url, video_title = fetch_latest_from_page(page_url)
+
+if not video_url:
+    print("❌ فشل جلب الفيديو"); exit(1)
+
+print(f"✏️  العنوان: {video_title}")
+
+# 2. تحميل الفيديو
+if not download_video(video_url): exit(1)
+
+# 3. معلومات وتحجيم
 src_w, src_h, dur = get_video_info("/tmp/main.mp4")
 print(f"📏 {src_w}×{src_h} | {dur:.1f}s")
 
 main_ready = "/tmp/main.mp4"
 if src_w != TARGET_W or src_h != TARGET_H:
-    main_ready = "/tmp/main_scaled.mp4"
-    if not scale_to_target("/tmp/main.mp4", main_ready, TARGET_W, TARGET_H):
-        main_ready = "/tmp/main.mp4"
+    if scale_to_target("/tmp/main.mp4", "/tmp/main_scaled.mp4", TARGET_W, TARGET_H):
+        main_ready = "/tmp/main_scaled.mp4"
 
 W, H = TARGET_W, TARGET_H
 
-# 3. رسم الـ Overlay
-print("\n🖌️  رسم الـ Overlay...")
-first_color = target_pubs[0].get("title_color", "0x1a237e@0.85")
-overlay_png = render_overlay(VIDEO_TITLE, VIDEO_LOCATION, VIDEO_DATE,
-                              VIDEO_VISIBILITY, first_color, W, H)
-
-# 4. تطبيق الـ Overlay (يبقى طول الفيديو)
-overlaid_base = "/tmp/overlaid_base.mp4"
-if not apply_overlay(main_ready, overlay_png, overlaid_base, dur):
-    overlaid_base = main_ready
-
-# 5. معالجة كل Publisher
+# 4. معالجة كل Publisher
 print(f"\n🏭 معالجة {len(target_pubs)} صفحة...\n" + "─"*40)
 
 success = 0
 for pub in target_pubs:
     name  = pub["name"]
-    color = pub.get("title_color", first_color)
+    color = pub.get("title_color", "#1a237e")
     print(f"\n📺 {name}")
+    current = main_ready
 
-    current = overlaid_base
+    # ── PNG Frame ──────────────────────────────────────────────
+    frame_local = f"/tmp/frame_{name}.png"
+    framed_out  = f"/tmp/framed_{name}.mp4"
+    if download_from_cloudinary(pub["frame_png_id"], frame_local, resource_type="image"):
+        if apply_png_frame(current, frame_local, framed_out, W, H):
+            current = framed_out
+    else:
+        print(f"  ⚠️ PNG Frame غير متاح — سيُنشر بدونه")
 
-    # overlay بلون مخصص إذا اختلف
-    if color != first_color:
-        custom_png = render_overlay(VIDEO_TITLE, VIDEO_LOCATION, VIDEO_DATE,
-                                     VIDEO_VISIBILITY, color, W, H)
-        custom_ovr = f"/tmp/ovr_{name}.mp4"
-        if apply_overlay(main_ready, custom_png, custom_ovr, dur):
-            current = custom_ovr
-        if os.path.exists(custom_png): os.remove(custom_png)
+    # ── شريط العنوان ───────────────────────────────────────────
+    title_png  = render_title_overlay(video_title, color, W, H)
+    titled_out = f"/tmp/titled_{name}.mp4"
+    if apply_title_overlay(current, title_png, titled_out, dur):
+        current = titled_out
 
-    # Green Screen
-    gs_in  = f"/tmp/gs_{name}.mp4"
-    gs_out = f"/tmp/gs_{name}_done.mp4"
-    if download_from_cloudinary(pub["green_screen_id"], gs_in):
-        if apply_green_screen(current, gs_in, gs_out, W, H, dur):
-            current = gs_out
-
-    # Outro
+    # ── Outro ──────────────────────────────────────────────────
     outro_in  = f"/tmp/outro_{name}.mp4"
     final_out = f"/tmp/final_{name}.mp4"
     if download_from_cloudinary(pub["outro_id"], outro_in):
         if add_outro(current, outro_in, final_out, W, H):
             current = final_out
 
-    # رفع وإرسال
+    # ── رفع وإرسال ─────────────────────────────────────────────
     try:
-        upload_and_send(current, name)
+        compress_and_upload(current, name, video_title, video_url)
         success += 1
         print(f"  🎉 {name} نُشر")
     except Exception as e:
