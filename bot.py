@@ -152,24 +152,28 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
                 gy = gy0 + row * rsp
                 d.ellipse([gx-dot_r,gy-dot_r,gx+dot_r,gy+dot_r], fill=color)
 
-    # ── أيقونة يسار + نص يمينها (مثل هسبريس) ─────────────────
+    # ── أيقونة يمين + نص يمتد لليسار (align right مثل هسبريس) ──
     info_items = []
     if location: info_items.append(("location", location))
     if date_str: info_items.append(("date",     date_str))
 
-    icon_sz  = int(info_sz * 0.46)
-    icon_gap = int(info_sz * 0.28)
+    icon_sz   = int(info_sz * 0.46)
+    icon_gap  = int(info_sz * 0.28)
     y = int(H * 0.13)
+
+    # نحسب أوسع سطر لتحديد نقطة الارتساء اليمنى الثابتة
+    max_tw = max((get_tw(draw_perm, t, font_i)[0] for _, t in info_items), default=0)
+    right_anchor = pad + max_tw + icon_gap + icon_sz * 2  # نقطة يمين ثابتة
 
     for kind, text in info_items:
         tw, th = get_tw(draw_perm, text, font_i)
 
-        # أيقونة أقصى اليسار، مركزها = منتصف ارتفاع النص بالضبط
-        icon_cx = pad + icon_sz
+        # الأيقونة عند نقطة الارتساء اليمنى
+        icon_cx = right_anchor - icon_sz
         icon_cy = y + th // 2
 
-        # نص يبدأ على يمين الأيقونة
-        text_x  = pad + icon_sz * 2 + icon_gap
+        # النص يبدأ من اليسار وينتهي عند الأيقونة (align right)
+        text_x  = icon_cx - icon_sz - icon_gap - tw
 
         draw_perm.text((text_x+2, y+2), text, font=font_i, fill=shadow)
         draw_perm.text((text_x,   y),   text, font=font_i, fill=white)
@@ -177,8 +181,7 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
         if kind == "location":
             draw_icon_location(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
         else:
-            # تصحيح التناسق العمودي لأيقونة التقويم
-            draw_icon_calendar(draw_perm, icon_cx, icon_cy - int(icon_sz*0.05), icon_sz, (255,255,255,240))
+            draw_icon_calendar(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
 
         y += th + int(info_sz * 0.55)
 
