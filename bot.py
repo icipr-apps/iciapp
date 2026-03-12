@@ -178,10 +178,10 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
         draw_perm.text((text_x+2, y+2), text, font=font_i, fill=shadow)
         draw_perm.text((text_x,   y),   text, font=font_i, fill=white)
 
-        if kind == "location":
-            draw_icon_location(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
-        else:
-            draw_icon_calendar(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
+       if kind == "location":
+       draw_icon_location(draw_perm, icon_cx, icon_cy, icon_sz, (255,255,255,240))
+       else:
+       draw_icon_calendar(draw_perm, icon_cx, icon_cy + int(icon_sz * 0.18), icon_sz, (255,255,255,240))
 
         y += th + int(info_sz * 0.55)
 
