@@ -653,10 +653,30 @@ def add_outro(main, outro, out, W, H):
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
     print("  ✅ (concat)" if ok else "  ❌"); return ok
 
+
+def compress_for_upload(src, out, max_mb=95):
+    """ضغط خفيف فقط إذا تجاوز الحجم الحد المسموح"""
+    size_mb = os.path.getsize(src) / 1024 / 1024
+    if size_mb <= max_mb:
+        return src
+    print(f"  📦 ضغط ({size_mb:.1f}MB > {max_mb}MB)...")
+    subprocess.run(
+        ["ffmpeg", "-y", "-threads", "2", "-i", src,
+         "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast",
+         "-c:a", "aac", "-b:a", "128k", out],
+        capture_output=True, text=True, timeout=300
+    )
+    if os.path.exists(out) and os.path.getsize(out) > 1000:
+        new_mb = os.path.getsize(out) / 1024 / 1024
+        print(f"  ✅ مضغوط: {new_mb:.1f}MB")
+        return out
+    return src
+
 def upload_and_send(video_path, pub_name, title, source_url):
     """رفع الفيديو بالجودة الأصلية بدون ضغط"""
+    video_path = compress_for_upload(video_path, video_path.replace(".mp4", "_cmp.mp4"))
     mb = os.path.getsize(video_path) / 1024 / 1024
-    print(f"  📤 رفع بالجودة الأصلية — {mb:.1f}MB")
+    print(f"  📤 رفع — {mb:.1f}MB")
 
     safe      = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
     public_id = f"tmp_{safe}"
@@ -664,7 +684,6 @@ def upload_and_send(video_path, pub_name, title, source_url):
     result = cloudinary.uploader.upload(
         video_path, resource_type="video",
         public_id=public_id, overwrite=True,
-        quality="100",
     )
     url = result["secure_url"]
     print(f"  ✅ رُفع: {url[:70]}")
