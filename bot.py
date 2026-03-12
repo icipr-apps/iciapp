@@ -235,12 +235,9 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
 # ══════════════════════════════════════════════════════════════
 #   Overlay مميز لـ chouf2
 #
-#   ┌──────────────────────────────────────────┐
-#   │ 🗓 11/03/2026          فاس 📍            │  ← شريطان أعلى (يسار/يمين)
-#   │         محتوى الفيديو                    │
-#   │  ██████ عنوان الفيديو ██████             │  ← شريط بلون البابليشر
-#   │          [ خاص / متداول ]               │  ← badge أسفل العنوان
-#   └──────────────────────────────────────────┘
+#   تاريخ [أيقونة]  يسار    |    [أيقونة] مكان  يمين  (بدون خلفية)
+#   شريط عنوان أضيق بلون البابليشر
+#   [مسافة] badge خاص/متداول بلون البابليشر
 # ══════════════════════════════════════════════════════════════
 
 def render_overlay_chouf2(title, location, date_str, visibility, color_hex, W, H):
@@ -248,109 +245,94 @@ def render_overlay_chouf2(title, location, date_str, visibility, color_hex, W, H
     import math
     white  = (255, 255, 255, 255)
     shadow = (0, 0, 0, 160)
-    dark   = (20, 20, 20, 225)
 
     hex_str   = color_hex.replace("0x","").replace("#","")
     pub_color = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), 220)
 
     font_sz  = max(34, int(W * 0.038))
     font_i   = load_font(font_sz)
-    strip_h  = int(font_sz * 2.0)
-    pad_h    = int(font_sz * 0.7)
     icon_sz  = int(font_sz * 0.52)
     icon_gap = int(font_sz * 0.3)
+    info_y   = int(H * 0.055)   # ينزل عن أعلى الفيديو
 
-    # ── Overlay 1: دائم (تاريخ يسار + مكان يمين) ──────────────
+    # ── Overlay 1: دائم (تاريخ يسار + مكان يمين، بدون خلفية) ──
     img_perm  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_perm = ImageDraw.Draw(img_perm)
 
     def draw_icon_location(d, cx, cy, R, color):
-        lw      = max(3, int(R * 0.18))
-        head_r  = R * 0.62
-        head_cy = cy - R * 0.28
+        lw = max(3, int(R*0.18))
+        head_r = R*0.62; head_cy = cy - R*0.28
         pts = []
         for i in range(41):
-            angle = math.pi + (math.pi * i / 40)
-            pts.append((cx + head_r * math.cos(angle),
-                        head_cy + head_r * math.sin(angle)))
-        tip_y  = cy + R * 0.95
-        base_y = head_cy + head_r * 0.85
-        hw     = head_r * 0.55
-        pts += [(cx+hw, base_y),(cx, tip_y),(cx-hw, base_y)]
+            angle = math.pi + (math.pi*i/40)
+            pts.append((cx + head_r*math.cos(angle), head_cy + head_r*math.sin(angle)))
+        tip_y = cy+R*0.95; base_y = head_cy+head_r*0.85; hw = head_r*0.55
+        pts += [(cx+hw,base_y),(cx,tip_y),(cx-hw,base_y)]
         d.polygon(pts, outline=color, width=lw)
-        ir = max(3, int(head_r * 0.38))
-        d.ellipse([cx-ir, head_cy-ir, cx+ir, head_cy+ir], outline=color, width=lw)
+        ir = max(3, int(head_r*0.38))
+        d.ellipse([cx-ir,head_cy-ir,cx+ir,head_cy+ir], outline=color, width=lw)
 
     def draw_icon_calendar(d, cx, cy, R, color):
-        lw  = max(3, int(R * 0.17))
-        x0  = cx - R;  x1 = cx + R
-        y0  = cy - int(R * 0.80); y1 = cy + int(R * 0.90)
-        rad = max(3, int(R * 0.18))
-        hh  = int((y1 - y0) * 0.28)
+        lw = max(3, int(R*0.17))
+        x0=cx-R; x1=cx+R; y0=cy-int(R*0.80); y1=cy+int(R*0.90)
+        rad = max(3, int(R*0.18)); hh = int((y1-y0)*0.28)
         d.rounded_rectangle([x0,y0,x1,y1], radius=rad, outline=color, width=lw)
-        d.line([(x0+1, y0+hh),(x1-1, y0+hh)], fill=color, width=lw)
-        pk_h = int(R * 0.35); pk_w = max(2, int(R * 0.11))
-        for px in [cx - int(R*0.38), cx + int(R*0.38)]:
-            d.rounded_rectangle([px-pk_w, y0-pk_h, px+pk_w, y0+int(pk_h*0.4)],
+        d.line([(x0+1,y0+hh),(x1-1,y0+hh)], fill=color, width=lw)
+        pk_h=int(R*0.35); pk_w=max(2,int(R*0.11))
+        for px in [cx-int(R*0.38), cx+int(R*0.38)]:
+            d.rounded_rectangle([px-pk_w,y0-pk_h,px+pk_w,y0+int(pk_h*0.4)],
                                  radius=pk_w, outline=color, width=lw)
-        dot_r = max(2, int(R * 0.09))
-        gx0 = x0 + int((x1-x0)*0.16)
-        gy0 = y0 + hh + int((y1-y0-hh)*0.22)
-        csp = int((x1-x0)*0.62/2)
-        rsp = int((y1-y0-hh)*0.48)
+        dot_r=max(2,int(R*0.09))
+        gx0=x0+int((x1-x0)*0.16); gy0=y0+hh+int((y1-y0-hh)*0.22)
+        csp=int((x1-x0)*0.62/2); rsp=int((y1-y0-hh)*0.48)
         for row in range(2):
             for col in range(3):
-                gx = gx0 + col*csp; gy = gy0 + row*rsp
+                gx=gx0+col*csp; gy=gy0+row*rsp
                 d.ellipse([gx-dot_r,gy-dot_r,gx+dot_r,gy+dot_r], fill=color)
 
-    # شريط التاريخ أعلى يسار
+    margin_x = int(W * 0.037)
+
+    # التاريخ يسار: [نص]  [أيقونة] — الأيقونة على يمين النص
     if date_str:
         tw, th = get_tw(draw_perm, date_str, font_i)
-        s_w = tw + pad_h*2 + icon_sz*2 + icon_gap
-        draw_perm.rectangle([0, 0, s_w, strip_h], fill=dark)
-        ic_cx = pad_h//2 + icon_sz
-        ic_cy = strip_h//2 + int(icon_sz * 0.10)
+        ic_cx = margin_x + tw + icon_gap + icon_sz
+        ic_cy = info_y + th//2
+        draw_perm.text((margin_x+2, info_y+2), date_str, font=font_i, fill=shadow)
+        draw_perm.text((margin_x,   info_y),   date_str, font=font_i, fill=white)
         draw_icon_calendar(draw_perm, ic_cx, ic_cy, icon_sz, white)
-        tx = ic_cx + icon_sz + icon_gap
-        ty = (strip_h - th)//2
-        draw_perm.text((tx+2, ty+2), date_str, font=font_i, fill=shadow)
-        draw_perm.text((tx,   ty),   date_str, font=font_i, fill=white)
 
-    # شريط المكان أعلى يمين
+    # المكان يمين: [أيقونة]  [نص]
     if location:
         tw2, th2 = get_tw(draw_perm, location, font_i)
-        s_w2 = tw2 + pad_h*2 + icon_sz*2 + icon_gap
-        draw_perm.rectangle([W - s_w2, 0, W, strip_h], fill=dark)
-        ic_cx2 = W - pad_h//2 - icon_sz
-        ic_cy2 = strip_h//2
+        ic_cx2 = W - margin_x - tw2 - icon_gap - icon_sz
+        ic_cy2 = info_y + th2//2
         draw_icon_location(draw_perm, ic_cx2, ic_cy2, icon_sz, white)
-        tx2 = ic_cx2 - icon_sz - icon_gap - tw2
-        ty2 = (strip_h - th2)//2
-        draw_perm.text((tx2+2, ty2+2), location, font=font_i, fill=shadow)
-        draw_perm.text((tx2,   ty2),   location, font=font_i, fill=white)
+        loc_tx = ic_cx2 + icon_sz + icon_gap
+        draw_perm.text((loc_tx+2, info_y+2), location, font=font_i, fill=shadow)
+        draw_perm.text((loc_tx,   info_y),   location, font=font_i, fill=white)
 
     img_perm.save("/tmp/overlay_permanent.png", "PNG")
     print("✅ overlay_permanent.png (chouf2)")
 
-    # ── Overlay 2: شريط العنوان + badge خاص/متداول ────────────
+    # ── Overlay 2: شريط العنوان أضيق + badge بلون البابليشر ──
     img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_title = ImageDraw.Draw(img_title)
 
     if title:
-        font_size  = max(20, int(W * 0.050))
+        font_size  = max(20, int(W * 0.048))
         font_t     = load_font(font_size)
-        bar_pad_h  = int(W * 0.05)
-        bar_pad_v  = int(H * 0.018)
-        bar_w      = W - int(W * 0.08)
+        bar_pad_h  = int(W * 0.045)
+        bar_pad_v  = int(H * 0.016)
+        bar_w      = int(W * 0.78)          # أضيق — لا يلامس الإطار
         usable     = bar_w - 2 * bar_pad_h
         lines      = wrap_text(draw_title, title, font_t, usable)
         line_h     = int(font_size * 1.55)
         bar_h      = len(lines) * line_h + 2 * bar_pad_v
         bar_x      = (W - bar_w) // 2
-        bar_y      = H - bar_h - int(H * 0.20)
+        bar_y      = H - bar_h - int(H * 0.22)
 
         # شريط العنوان بلون البابليشر
-        draw_title.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=pub_color)
+        draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=pub_color)
         for i, line in enumerate(lines):
             lw, _ = get_tw(draw_title, line, font_t)
             tx = bar_x + (bar_w - lw) // 2
@@ -358,20 +340,21 @@ def render_overlay_chouf2(title, location, date_str, visibility, color_hex, W, H
             draw_title.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
             draw_title.text((tx,   ty),   line, font=font_t, fill=white)
 
-        # badge خاص/متداول أسفل شريط العنوان
+        # badge خاص/متداول: مسافة تحت العنوان + لون البابليشر
         if visibility:
-            font_bdg  = load_font(max(28, int(W * 0.038)))
+            font_bdg  = load_font(max(28, int(W * 0.036)))
             bw, bh    = get_tw(draw_title, visibility, font_bdg)
-            bdg_pad_h = int(W * 0.04)
-            bdg_pad_v = int(H * 0.012)
+            bdg_pad_h = int(W * 0.045)
+            bdg_pad_v = int(H * 0.010)
             bdg_w     = bw + bdg_pad_h * 2
             bdg_h     = bh + bdg_pad_v * 2
             bdg_x     = bar_x + (bar_w - bdg_w) // 2
-            bdg_y     = bar_y + bar_h
-            draw_title.rectangle([bdg_x, bdg_y, bdg_x + bdg_w, bdg_y + bdg_h], fill=dark)
-            draw_title.text((bdg_x + bdg_pad_h + 2, bdg_y + bdg_pad_v + 2),
+            bdg_gap   = int(H * 0.013)      # مسافة بين العنوان والـ badge
+            bdg_y     = bar_y + bar_h + bdg_gap
+            draw_title.rectangle([bdg_x, bdg_y, bdg_x+bdg_w, bdg_y+bdg_h], fill=pub_color)
+            draw_title.text((bdg_x+bdg_pad_h+2, bdg_y+bdg_pad_v+2),
                             visibility, font=font_bdg, fill=(0,0,0,130))
-            draw_title.text((bdg_x + bdg_pad_h, bdg_y + bdg_pad_v),
+            draw_title.text((bdg_x+bdg_pad_h,   bdg_y+bdg_pad_v),
                             visibility, font=font_bdg, fill=white)
 
     img_title.save("/tmp/overlay_title.png", "PNG")
@@ -778,7 +761,7 @@ for pub in target_pubs:
     else:
         print(f"  ⚠️ PNG Frame غير متاح — سيُنشر بدونه")
 
-    # ── Overlay: chouf2 له تصميم مميز، الباقي عادي ────────────
+    # ── رسم وتطبيق الـ Overlay الكامل (عنوان + مكان + تاريخ + متداول) ──
     if name == "chouf2":
         render_overlay_chouf2(video_title, VIDEO_LOCATION, VIDEO_DATE, VIDEO_VISIBILITY, color, W, H)
     else:
