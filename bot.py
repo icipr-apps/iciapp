@@ -664,8 +664,7 @@ def upload_and_send(video_path, pub_name, title, source_url):
     result = cloudinary.uploader.upload(
         video_path, resource_type="video",
         public_id=public_id, overwrite=True,
-        quality="100",           # أعلى جودة
-        video_codec="copy",      # بدون إعادة ترميز
+        quality="100",
     )
     url = result["secure_url"]
     print(f"  ✅ رُفع: {url[:70]}")
