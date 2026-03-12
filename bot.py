@@ -250,10 +250,10 @@ def render_overlay_chouf2(title, location, date_str, visibility, color_hex, W, H
     hex_str   = color_hex.replace("0x","").replace("#","")
     pub_color = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), 220)
 
-    font_sz  = max(34, int(W * 0.038))
+    font_sz  = max(28, int(W * 0.037))
     font_i   = load_font(font_sz)
-    icon_sz  = int(font_sz * 0.52)
-    icon_gap = int(font_sz * 0.28)
+    icon_sz  = int(font_sz * 0.42)
+    icon_gap = int(font_sz * 0.55)
     margin_x = int(W * 0.037)
 
     # info_y: يتوافق مع مستوى شعار الـ frame (أعلى الفيديو)
