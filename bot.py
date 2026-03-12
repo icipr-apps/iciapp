@@ -170,8 +170,8 @@ def render_overlay(title, location, date_str, visibility, color_hex, W, H):
 
         # الأيقونة عند نقطة الارتساء اليمنى
         icon_cx = right_anchor - icon_sz
-        icon_cy = y + th // 2
-
+        icon_cy = y + th // 2 + int(icon_sz * 0.15)
+        
         # النص يبدأ من اليسار وينتهي عند الأيقونة (align right)
         text_x  = icon_cx - icon_sz - icon_gap - tw
 
