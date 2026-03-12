@@ -250,7 +250,7 @@ def render_overlay_chouf2(title, location, date_str, visibility, color_hex, W, H
     hex_str   = color_hex.replace("0x","").replace("#","")
     pub_color = (int(hex_str[0:2],16), int(hex_str[2:4],16), int(hex_str[4:6],16), 220)
 
-    font_sz  = max(28, int(W * 0.034))
+    font_sz  = max(28, int(W * 0.037))
     font_i   = load_font(font_sz)
     icon_sz  = int(font_sz * 0.42)
     icon_gap = int(font_sz * 0.55)
@@ -374,7 +374,7 @@ def apply_png_frame(main, frame_png, out, W, H):
         subprocess.run(
             ["ffmpeg", "-y", "-threads", "2", "-i", main, "-i", frame_png,
              "-filter_complex", fc,
-             *maps, "-c:v","libx264","-c:a","copy","-crf","18","-preset","faster", out],
+             *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast", out],
             capture_output=True, text=True, timeout=600
         )
         if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -419,7 +419,7 @@ def apply_overlay(main, out, dur):
                  "-loop","1","-t",str(loop_dur),"-i", perm_png,
                  "-loop","1","-t",str(loop_dur),"-i", title_png,
                  "-filter_complex", fc,
-                 *maps, "-c:v","libx264","-c:a","copy","-crf","18","-preset","faster","-shortest", out],
+                 *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast","-shortest", out],
                 capture_output=True, text=True, timeout=600
             )
             if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -440,7 +440,7 @@ def apply_overlay(main, out, dur):
                  "-i", main,
                  "-loop","1","-t",str(loop_dur),"-i", title_png,
                  "-filter_complex", fc2,
-                 *maps, "-c:v","libx264","-c:a","copy","-crf","18","-preset","faster","-shortest", out],
+                 *maps, "-c:v","libx264","-c:a","copy","-preset","ultrafast","-shortest", out],
                 capture_output=True, text=True, timeout=600
             )
             if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -637,7 +637,7 @@ def add_outro(main, outro, out, W, H):
 
     subprocess.run(
         ["ffmpeg","-y","-threads","2","-i",main,"-i",outro,"-filter_complex",fc,
-         *maps,"-c:v","libx264","-c:a","aac","-crf","18","-preset","faster",out],
+         *maps,"-c:v","libx264","-c:a","aac","-preset","ultrafast",out],
         capture_output=True, text=True, timeout=600
     )
     if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -647,7 +647,7 @@ def add_outro(main, outro, out, W, H):
         f.write(f"file '{main}'\nfile '{outro}'\n")
     subprocess.run(
         ["ffmpeg","-y","-threads","2","-f","concat","-safe","0","-i","/tmp/concat.txt",
-         "-vf",f"scale={W}:{H},setsar=1","-c:v","libx264","-c:a","aac","-crf","18","-preset","faster",out],
+         "-vf",f"scale={W}:{H},setsar=1","-c:v","libx264","-c:a","aac","-preset","ultrafast",out],
         capture_output=True, text=True, timeout=600
     )
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
@@ -664,6 +664,8 @@ def upload_and_send(video_path, pub_name, title, source_url):
     result = cloudinary.uploader.upload(
         video_path, resource_type="video",
         public_id=public_id, overwrite=True,
+        quality="100",           # أعلى جودة
+        video_codec="copy",      # بدون إعادة ترميز
     )
     url = result["secure_url"]
     print(f"  ✅ رُفع: {url[:70]}")
