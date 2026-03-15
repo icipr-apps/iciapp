@@ -351,7 +351,7 @@ def render_overlay_chouf2(title, location, date_str, visibility, color_hex, W, H
     draw_title = ImageDraw.Draw(img_title)
 
     if title:
-        font_size  = max(20, int(W * 0.048))
+        font_size  = 40
         font_t     = load_font(font_size)
         bar_pad_h  = int(W * 0.045)
         bar_pad_v  = int(H * 0.016)
