@@ -47,6 +47,7 @@ on:
           - ici
           - chouf
           - chouf2
+          - test
 
 jobs:
   process-video:
@@ -64,7 +65,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install yt-dlp cloudinary requests Pillow
+          pip install yt-dlp cloudinary requests Pillow fonttools brotli
 
       - name: Download Montserrat-Arabic font
         run: |
