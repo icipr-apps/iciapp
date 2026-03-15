@@ -495,7 +495,7 @@ def render_overlay_test(title, location, date_str, visibility, color_hex, W, H):
     draw_title = ImageDraw.Draw(img_title)
 
     if title:
-        font_size = max(20, int(W * 0.042))
+        font_size = 31
         font_t    = load_alnahar_font(font_size)
         pad_h     = int(W * 0.05)
         pad_v     = int(H * 0.018)
