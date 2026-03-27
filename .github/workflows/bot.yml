@@ -4,12 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       video_url:
-        description: '🔗 رابط الفيديو (Facebook Reel)'
+        description: '🔗 رابط الفيديو (Facebook Reel أو Cloudinary)'
         required: false
         default: ''
         type: string
       title:
-        description: '✏️ عنوان الفيديو'
+        description: '✏️ عنوان الفيديو (يُرسم على الفيديو)'
+        required: false
+        default: ''
+        type: string
+      post_text:
+        description: '📝 نص المنشور (يُرسل مع الويبهوك — يقبل هاشتاغات وإشارات)'
         required: false
         default: ''
         type: string
@@ -24,7 +29,7 @@ on:
         default: ''
         type: string
       source:
-        description: '🔍 مصدر الفيديو'
+        description: '🔍 مصدر الفيديو (يظهر بجانب نوع الفيديو: متداول - @المصدر)'
         required: false
         default: ''
         type: string
@@ -37,17 +42,10 @@ on:
           - متداول
           - خاص
       publisher:
-        description: '👤 الناشر (ALL = جميع الصفحات)'
+        description: '👤 الناشر — ALL أو اسم واحد أو أسماء بفاصلة: m4,ici,chouf'
         required: false
         default: 'ALL'
-        type: choice
-        options:
-          - ALL
-          - m4
-          - ici
-          - chouf
-          - chouf2
-          - test
+        type: string
 
 jobs:
   process-video:
@@ -88,6 +86,7 @@ jobs:
         env:
           VIDEO_URL:             ${{ github.event.inputs.video_url }}
           VIDEO_TITLE:           ${{ github.event.inputs.title }}
+          VIDEO_POST_TEXT:       ${{ github.event.inputs.post_text }}
           VIDEO_LOCATION:        ${{ github.event.inputs.location }}
           VIDEO_DATE:            ${{ github.event.inputs.date }}
           VIDEO_SOURCE:          ${{ github.event.inputs.source }}
