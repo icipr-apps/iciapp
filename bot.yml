@@ -1,0 +1,102 @@
+name: FB Video Bot — Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: '🔗 رابط الفيديو (Facebook Reel أو Cloudinary)'
+        required: false
+        default: ''
+        type: string
+      title:
+        description: '✏️ عنوان الفيديو (يُرسم على الفيديو)'
+        required: false
+        default: ''
+        type: string
+      post_text:
+        description: '📝 نص المنشور (يُرسل مع الويبهوك)'
+        required: false
+        default: ''
+        type: string
+      location:
+        description: '📍 المكان'
+        required: false
+        default: ''
+        type: string
+      date:
+        description: '📅 التاريخ'
+        required: false
+        default: ''
+        type: string
+      source:
+        description: '🔍 مصدر الفيديو'
+        required: false
+        default: ''
+        type: string
+      visibility:
+        description: '🔒 نوع الفيديو'
+        required: false
+        default: 'متداول'
+        type: choice
+        options:
+          - متداول
+          - خاص
+      publisher:
+        description: '👤 الناشر — ALL أو اسم واحد أو أسماء بفاصلة: m4,ici,chouf'
+        required: false
+        default: 'ALL'
+        type: string
+
+jobs:
+  process-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # ✅ حماية: لا يُشغَّل إلا من حساب المالك فقط
+    if: github.actor == 'alnaharcontact-ops'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg wget
+
+      - name: Install Python dependencies
+        run: |
+          pip install yt-dlp cloudinary requests Pillow fonttools brotli
+
+      - name: Download Montserrat-Arabic font
+        run: |
+          if [ ! -f "Montserrat-Arabic-Bold.ttf" ]; then
+            wget -q -O Montserrat-Arabic-Bold.ttf \
+              "https://raw.githubusercontent.com/typeagm/Montserrat-Arabic/master/fonts/Montserrat-Arabic-Bold.ttf" \
+              || echo "Font not downloaded, will use system font"
+          fi
+
+      - name: Write cookies file
+        run: |
+          if [ -n "${{ secrets.FB_COOKIES }}" ]; then
+            echo "${{ secrets.FB_COOKIES }}" > /tmp/cookies.txt
+            echo "✅ Cookies written"
+          else
+            echo "⚠️ No FB_COOKIES secret"
+          fi
+
+      - name: Process and publish video
+        env:
+          VIDEO_URL:             ${{ github.event.inputs.video_url }}
+          VIDEO_TITLE:           ${{ github.event.inputs.title }}
+          VIDEO_POST_TEXT:       ${{ github.event.inputs.post_text }}
+          VIDEO_LOCATION:        ${{ github.event.inputs.location }}
+          VIDEO_DATE:            ${{ github.event.inputs.date }}
+          VIDEO_SOURCE:          ${{ github.event.inputs.source }}
+          VIDEO_VISIBILITY:      ${{ github.event.inputs.visibility }}
+          VIDEO_PUBLISHER:       ${{ github.event.inputs.publisher }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:    ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          WEBHOOK_URL:           ${{ secrets.WEBHOOK_URL }}
+        run: python bot.py

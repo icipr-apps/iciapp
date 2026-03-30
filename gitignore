@@ -1,0 +1,12 @@
+# ══ ملفات سرية — لا تُرفع إلى GitHub أبداً ══
+config.php
+pub_state.json
+processed_ids.json
+cookies.txt
+/tmp/
+
+# ══ ملفات النظام ══
+.DS_Store
+*.log
+__pycache__/
+*.pyc
