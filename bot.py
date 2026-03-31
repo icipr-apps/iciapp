@@ -327,7 +327,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         draw_perm.text((loc_tx,   info_y),   location, font=font_i, fill=white)
         draw_icon_location(draw_perm, ic_cx2, text_cy2, icon_sz, white)
     
-    # 2. @مصدر عمودي على اليسار مع إزاحة لليمين قليلاً (15 بكسل)
+    # 2. @مصدر عمودي على اليسار مع إزاحة أكبر لليمين (30 بكسل)
     if source_badge:
         badge_sz = max(26, int(W * 0.030))
         font_b   = load_font(badge_sz)
@@ -338,33 +338,31 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         td.text((margin+1, margin+1), source_badge, font=font_b, fill=shadow)
         td.text((margin,   margin),   source_badge, font=font_b, fill=white)
         rotated  = tmp.rotate(90, expand=True)
-        # إزاحة لليمين: 15 بكسل بدلاً من 4
-        img_perm.paste(rotated, (15, (H - rotated.height) // 2), rotated)
+        # إزاحة أكبر لليمين: 30 بكسل بدلاً من 4 أو 15
+        img_perm.paste(rotated, (30, (H - rotated.height) // 2), rotated)
     
-    # 3. متداول/خاص (أسفل الفيديو، تحت شريط العنوان) مع خلفية #4a1816
-    if visibility_badge:
-        visibility_font = load_font(max(32, int(W * 0.038)))
-        vw, vh = get_tw(draw_perm, visibility_badge, visibility_font)
-        v_margin = int(H * 0.025)  # مسافة من الأسفل
-        v_x = (W - vw) // 2
-        v_y = H - vh - v_margin
-        
-        # خلفية باللون #4a1816
-        bg_padding = int(vh * 0.4)
-        draw_perm.rectangle(
-            [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
-            fill=bg_color
-        )
-        draw_perm.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
-        draw_perm.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
+    # 3. متداول/خاص (سيتم إضافته بعد إنشاء شريط العنوان)
+    # سنقوم بإضافته في overlay_title.png بدلاً من overlay_permanent.png
     
     img_perm.save("/tmp/overlay_permanent.png", "PNG")
     print("✅ overlay_permanent.png (chouf2)")
     
-    # ========== شريط العنوان (يختفي بعد 12 ثانية) ==========
+    # ========== شريط العنوان + متداول/خاص تحته مباشرة ==========
     img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_title = ImageDraw.Draw(img_title)
     
+    current_y = H  # نبدأ من الأسفل
+    
+    # أولاً: نضيف كلمة "متداول/خاص" (ستكون أسفل العنوان مباشرة)
+    if visibility_badge:
+        visibility_font = load_font(max(32, int(W * 0.038)))
+        vw, vh = get_tw(draw_title, visibility_badge, visibility_font)
+        bg_padding = int(vh * 0.4)
+        
+        # نحدد موقعها لاحقاً بعد حساب ارتفاع العنوان
+        # سنخزنها مؤقتاً
+        
+    # ثانياً: نضيف شريط العنوان (يختفي بعد 12 ثانية)
     if title:
         font_size  = 40
         font_t     = load_font(font_size)
@@ -377,15 +375,15 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         bar_h      = len(lines) * line_h + 2 * bar_pad_v
         bar_x      = (W - bar_w) // 2
         
-        # نضع الشريط فوق كلمة "متداول" بقليل (نفس المسافة الأصلية)
+        # حساب ارتفاع كلمة متداول/خاص إذا وجدت
         visibility_height = 0
         if visibility_badge:
             visibility_font = load_font(max(32, int(W * 0.038)))
             _, vh = get_tw(draw_title, visibility_badge, visibility_font)
-            visibility_height = vh + int(H * 0.025)
+            visibility_height = vh + int(vh * 0.8)  # المسافة تحت العنوان
         
-        # رفع الشريط للأعلى ليعود لمكانه الأصلي
-        bar_y = H - bar_h - visibility_height - int(H * 0.08)  # تغيير من 0.015 إلى 0.08
+        # موقع شريط العنوان: فوق كلمة متداول/خاص
+        bar_y = H - bar_h - visibility_height - int(H * 0.03)
         
         # خلفية باللون #4a1816 غير شفافة
         draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=bg_color)
@@ -395,16 +393,46 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
             tx = bar_x + (bar_w - lw) // 2
             ty = bar_y + bar_pad_v + i * line_h
             draw_title.text((tx, ty), line, font=font_t, fill=white)
+        
+        # الآن نضيف كلمة "متداول/خاص" تحت شريط العنوان مباشرة
+        if visibility_badge:
+            v_margin = int(H * 0.015)  # مسافة صغيرة تحت الشريط
+            v_x = (W - vw) // 2
+            v_y = bar_y + bar_h + v_margin
+            
+            # خلفية باللون #4a1816
+            draw_title.rectangle(
+                [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
+                fill=bg_color
+            )
+            draw_title.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
+            draw_title.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
     
-    if title:
+    else:
+        # إذا لم يوجد عنوان، نضيف فقط كلمة متداول/خاص في أسفل الفيديو
+        if visibility_badge:
+            visibility_font = load_font(max(32, int(W * 0.038)))
+            vw, vh = get_tw(draw_title, visibility_badge, visibility_font)
+            bg_padding = int(vh * 0.4)
+            v_margin = int(H * 0.05)
+            v_x = (W - vw) // 2
+            v_y = H - vh - v_margin
+            
+            draw_title.rectangle(
+                [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
+                fill=bg_color
+            )
+            draw_title.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
+            draw_title.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
+    
+    if title or visibility_badge:
         img_title.save("/tmp/overlay_title.png", "PNG")
         print("✅ overlay_title.png (chouf2)")
     else:
         if os.path.exists("/tmp/overlay_title.png"):
             os.remove("/tmp/overlay_title.png")
-        print("ℹ️  لا عنوان → overlay_title.png محذوف (chouf2)")
+        print("ℹ️  لا عنوان ولا متداول → overlay_title.png محذوف (chouf2)")
     return "/tmp/overlay_title.png"
-
 
 # ══════════════════════════════════════════════════════════════
 #   Overlay مميز لـ test (AlNahar)
