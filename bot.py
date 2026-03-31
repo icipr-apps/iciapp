@@ -104,7 +104,7 @@ def wrap_text(draw, text, font, max_w):
 #   overlay_permanent.png ← مكان + تاريخ + متداول/خاص (أسفل) + @مصدر (يسار)
 #                            يظهر fade-in ويبقى طول الفيديو
 #
-#   overlay_title.png     ← شريط العنوان فقط (خلفية داكنة غير شفافة)
+#   overlay_title.png     ← شريط العنوان فقط (خلفية #4a1816)
 #                            يظهر fade-in ويختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
 
@@ -251,9 +251,9 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
 # ══════════════════════════════════════════════════════════════
 #   Overlay مميز لـ chouf2
 #   - التاريخ والمكان يظهران طيلة الفيديو (أعلى)
-#   - متداول/خاص يظهر تحت شريط العنوان (أسفل) طيلة الفيديو
-#   - @مصدر يظهر عمودي على اليسار طيلة الفيديو
-#   - شريط العنوان بخلفية داكنة غير شفافة ويختفي بعد 12 ثانية
+#   - متداول/خاص يظهر تحت شريط العنوان (أسفل) طيلة الفيديو مع خلفية #4a1816
+#   - @مصدر يظهر عمودي على اليسار مع إزاحة لليمين قليلاً
+#   - شريط العنوان بخلفية #4a1816 غير شفافة ويختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
 
 def render_overlay_chouf2(title, location, date_str, visibility_badge, source_badge, color_hex, W, H):
@@ -263,8 +263,8 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
     white  = (255, 255, 255, 255)
     shadow = (0, 0, 0, 160)
     
-    # خلفية داكنة غير شفافة لشريط العنوان
-    dark_bg_solid = (20, 20, 20, 255)  # أسود داكن غير شفاف
+    # اللون المطلوب #4a1816
+    bg_color = (74, 24, 22, 255)  # #4a1816
     
     font_sz  = max(28, int(W * 0.037))
     font_i   = load_font(font_sz)
@@ -327,7 +327,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         draw_perm.text((loc_tx,   info_y),   location, font=font_i, fill=white)
         draw_icon_location(draw_perm, ic_cx2, text_cy2, icon_sz, white)
     
-    # 2. @مصدر عمودي على اليسار
+    # 2. @مصدر عمودي على اليسار مع إزاحة لليمين قليلاً (15 بكسل)
     if source_badge:
         badge_sz = max(26, int(W * 0.030))
         font_b   = load_font(badge_sz)
@@ -338,21 +338,22 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         td.text((margin+1, margin+1), source_badge, font=font_b, fill=shadow)
         td.text((margin,   margin),   source_badge, font=font_b, fill=white)
         rotated  = tmp.rotate(90, expand=True)
-        img_perm.paste(rotated, (4, (H - rotated.height) // 2), rotated)
+        # إزاحة لليمين: 15 بكسل بدلاً من 4
+        img_perm.paste(rotated, (15, (H - rotated.height) // 2), rotated)
     
-    # 3. متداول/خاص (أسفل الفيديو، تحت شريط العنوان)
+    # 3. متداول/خاص (أسفل الفيديو، تحت شريط العنوان) مع خلفية #4a1816
     if visibility_badge:
         visibility_font = load_font(max(32, int(W * 0.038)))
         vw, vh = get_tw(draw_perm, visibility_badge, visibility_font)
-        v_margin = int(H * 0.025)
+        v_margin = int(H * 0.025)  # مسافة من الأسفل
         v_x = (W - vw) // 2
         v_y = H - vh - v_margin
         
-        # خلفية شفافة خفيفة للرؤية
-        bg_padding = int(vh * 0.3)
+        # خلفية باللون #4a1816
+        bg_padding = int(vh * 0.4)
         draw_perm.rectangle(
             [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
-            fill=(0, 0, 0, 100)
+            fill=bg_color
         )
         draw_perm.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
         draw_perm.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
@@ -376,17 +377,18 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         bar_h      = len(lines) * line_h + 2 * bar_pad_v
         bar_x      = (W - bar_w) // 2
         
-        # نضع الشريط أعلى كلمة "متداول" بقليل
+        # نضع الشريط فوق كلمة "متداول" بقليل (نفس المسافة الأصلية)
         visibility_height = 0
         if visibility_badge:
             visibility_font = load_font(max(32, int(W * 0.038)))
             _, vh = get_tw(draw_title, visibility_badge, visibility_font)
             visibility_height = vh + int(H * 0.025)
         
-        bar_y = H - bar_h - visibility_height - int(H * 0.015)
+        # رفع الشريط للأعلى ليعود لمكانه الأصلي
+        bar_y = H - bar_h - visibility_height - int(H * 0.08)  # تغيير من 0.015 إلى 0.08
         
-        # خلفية داكنة غير شفافة (صلبة)
-        draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=dark_bg_solid)
+        # خلفية باللون #4a1816 غير شفافة
+        draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=bg_color)
         
         for i, line in enumerate(lines):
             lw, _ = get_tw(draw_title, line, font_t)
