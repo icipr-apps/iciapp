@@ -255,6 +255,7 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
 #   - @مصدر يظهر عمودي على اليسار مع إزاحة لليمين قليلاً
 #   - شريط العنوان بخلفية #4a1816 غير شفافة ويختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
+
 def render_overlay_chouf2(title, location, date_str, visibility_badge, source_badge, color_hex, W, H):
     from PIL import Image, ImageDraw
     import math
@@ -265,7 +266,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
     # اللون المطلوب #4a1816
     bg_color = (74, 24, 22, 255)  # #4a1816
     
-    font_sz  = max(22, int(W * 0.030))
+    font_sz  = max(28, int(W * 0.030))
     font_i   = load_font(font_sz)
     icon_sz  = int(font_sz * 0.42)
     icon_gap = int(font_sz * 0.55)
@@ -339,22 +340,27 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         rotated  = tmp.rotate(90, expand=True)
         img_perm.paste(rotated, (25, (H - rotated.height) // 2), rotated)
     
+    # 3. كلمة "متداول/خاص" (تبقى طيلة الفيديو - توضع في overlay_permanent.png)
+    if visibility_badge:
+        visibility_font = load_font(max(32, int(W * 0.038)))
+        vw, vh = get_tw(draw_perm, visibility_badge, visibility_font)
+        bg_padding = int(vh * 0.4)
+        v_x = (W - vw) // 2
+        v_y = H - vh - int(H * 0.12)  # الموقع الأصلي في الأسفل
+        
+        draw_perm.rectangle(
+            [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
+            fill=bg_color
+        )
+        draw_perm.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
+        draw_perm.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
+    
     img_perm.save("/tmp/overlay_permanent.png", "PNG")
     print("✅ overlay_permanent.png (chouf2)")
     
-    # ========== شريط العنوان + متداول/خاص تحته مباشرة (المكان الأصلي) ==========
+    # ========== شريط العنوان فقط (يختفي بعد 12 ثانية) ==========
     img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_title = ImageDraw.Draw(img_title)
-    
-    # تعريف المتغيرات مسبقاً
-    visibility_font = None
-    vw = 0
-    vh = 0
-    
-    # الحصول على أبعاد كلمة متداول/خاص إذا وجدت
-    if visibility_badge:
-        visibility_font = load_font(max(32, int(W * 0.038)))
-        vw, vh = get_tw(draw_title, visibility_badge, visibility_font)
     
     if title:
         font_size  = 40
@@ -368,8 +374,14 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         bar_h      = len(lines) * line_h + 2 * bar_pad_v
         bar_x      = (W - bar_w) // 2
         
-        # الموقع الأصلي: أسفل الفيديو مع مسافة مناسبة
-        bar_y = H - bar_h - int(H * 0.12)  # الموقع الأصلي
+        # موقع شريط العنوان (فوق كلمة متداول/خاص)
+        if visibility_badge:
+            visibility_font = load_font(max(32, int(W * 0.038)))
+            _, vh = get_tw(draw_title, visibility_badge, visibility_font)
+            v_margin = int(H * 0.008)
+            bar_y = H - bar_h - vh - int(H * 0.12) - v_margin
+        else:
+            bar_y = H - bar_h - int(H * 0.12)
         
         # خلفية باللون #4a1816 غير شفافة
         draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=bg_color)
@@ -379,43 +391,14 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
             tx = bar_x + (bar_w - lw) // 2
             ty = bar_y + bar_pad_v + i * line_h
             draw_title.text((tx, ty), line, font=font_t, fill=white)
-        
-        # إضافة كلمة "متداول/خاص" تحت شريط العنوان مباشرة (الموقع الأصلي)
-        if visibility_badge and vh > 0:
-            v_margin = int(H * 0.008)  # مسافة صغيرة تحت الشريط
-            v_x = (W - vw) // 2
-            v_y = bar_y + bar_h + v_margin
-            
-            # خلفية باللون #4a1816
-            bg_padding = int(vh * 0.4)
-            draw_title.rectangle(
-                [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
-                fill=bg_color
-            )
-            draw_title.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
-            draw_title.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
     
-    else:
-        # إذا لم يوجد عنوان، نضيف فقط كلمة متداول/خاص في الموقع الأصلي
-        if visibility_badge and vh > 0:
-            bg_padding = int(vh * 0.4)
-            v_x = (W - vw) // 2
-            v_y = H - vh - int(H * 0.08)  # الموقع الأصلي
-            
-            draw_title.rectangle(
-                [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
-                fill=bg_color
-            )
-            draw_title.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
-            draw_title.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
-    
-    if title or visibility_badge:
+    if title:
         img_title.save("/tmp/overlay_title.png", "PNG")
         print("✅ overlay_title.png (chouf2)")
     else:
         if os.path.exists("/tmp/overlay_title.png"):
             os.remove("/tmp/overlay_title.png")
-        print("ℹ️  لا عنوان ولا متداول → overlay_title.png محذوف (chouf2)")
+        print("ℹ️  لا عنوان → overlay_title.png محذوف (chouf2)")
     return "/tmp/overlay_title.png"
 
 # ══════════════════════════════════════════════════════════════
