@@ -265,7 +265,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
     # اللون المطلوب #4a1816
     bg_color = (74, 24, 22, 255)  # #4a1816
     
-    font_sz  = max(28, int(W * 0.037))
+    font_sz  = max(22, int(W * 0.030))
     font_i   = load_font(font_sz)
     icon_sz  = int(font_sz * 0.42)
     icon_gap = int(font_sz * 0.55)
