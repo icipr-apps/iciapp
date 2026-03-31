@@ -22,12 +22,11 @@ VIDEO_DATE        = os.environ.get("VIDEO_DATE",         "").strip()
 VIDEO_VISIBILITY  = os.environ.get("VIDEO_VISIBILITY",   "متداول").strip()
 VIDEO_SOURCE      = os.environ.get("VIDEO_SOURCE",       "").strip()
 
-# ── نص الـ badge على الفيديو: "متداول - @Kora" مثلاً ──────────
-VISIBILITY_BADGE = VIDEO_VISIBILITY
-if VIDEO_SOURCE:
-    VISIBILITY_BADGE = f"{VIDEO_VISIBILITY} - @{VIDEO_SOURCE}"
+# ── نص الـ badge ──────────────────────────────────────────────
+SOURCE_BADGE = f"@{VIDEO_SOURCE}" if VIDEO_SOURCE else ""
+VISIBILITY_BADGE = VIDEO_VISIBILITY  # متداول أو خاص
 
-print(f"👤 {VIDEO_PUBLISHER} | 📍 {VIDEO_LOCATION or '—'} | 📅 {VIDEO_DATE or '—'} | 🔒 {VISIBILITY_BADGE}")
+print(f"👤 {VIDEO_PUBLISHER} | 📍 {VIDEO_LOCATION or '—'} | 📅 {VIDEO_DATE or '—'} | 🔒 {VISIBILITY_BADGE} | 📌 {SOURCE_BADGE}")
 if VIDEO_POST_TEXT:
     print(f"📝 نص المنشور: {VIDEO_POST_TEXT[:80]}{'...' if len(VIDEO_POST_TEXT)>80 else ''}")
 
@@ -102,10 +101,10 @@ def wrap_text(draw, text, font, max_w):
 # ══════════════════════════════════════════════════════════════
 #   رسم الـ Overlay الكامل — مقسّم إلى ملفين:
 #
-#   overlay_permanent.png ← مكان + تاريخ + متداول/خاص[@مصدر]
+#   overlay_permanent.png ← مكان + تاريخ + متداول/خاص (أسفل) + @مصدر (يسار)
 #                            يظهر fade-in ويبقى طول الفيديو
 #
-#   overlay_title.png     ← شريط العنوان فقط
+#   overlay_title.png     ← شريط العنوان فقط (خلفية داكنة غير شفافة)
 #                            يظهر fade-in ويختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
 
@@ -195,8 +194,9 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
             draw_icon_calendar(draw_perm, icon_cx, icon_cy + int(icon_sz * 0.18), icon_sz, (255,255,255,240))
         y += th + int(info_sz * 0.55)
 
-    # badge الجانبي: "متداول - @Kora" مثلاً
-    if visibility_badge:
+    # badge الجانبي: "@مصدر" مثلاً
+    if visibility_badge and "متداول" in visibility_badge:
+        # هذا للـ visibility_badge في الناشرين العاديين
         badge_sz = max(26, int(W * 0.030))
         font_b   = load_font(badge_sz)
         bw, bh   = get_tw(draw_perm, visibility_badge, font_b)
@@ -250,20 +250,21 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
 
 # ══════════════════════════════════════════════════════════════
 #   Overlay مميز لـ chouf2
-#   - التاريخ والمكان يظهران طيلة الفيديو
-#   - visibility_badge (متداول/خاص + المصدر) يظهر عمودي على اليسار طيلة الفيديو
-#   - شريط العنوان بخلفية داكنة ويختفي بعد 12 ثانية
+#   - التاريخ والمكان يظهران طيلة الفيديو (أعلى)
+#   - متداول/خاص يظهر تحت شريط العنوان (أسفل) طيلة الفيديو
+#   - @مصدر يظهر عمودي على اليسار طيلة الفيديو
+#   - شريط العنوان بخلفية داكنة غير شفافة ويختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
 
-def render_overlay_chouf2(title, location, date_str, visibility_badge, color_hex, W, H):
+def render_overlay_chouf2(title, location, date_str, visibility_badge, source_badge, color_hex, W, H):
     from PIL import Image, ImageDraw
     import math
     
     white  = (255, 255, 255, 255)
     shadow = (0, 0, 0, 160)
     
-    # خلفية داكنة لشريط العنوان
-    dark_bg = (0, 0, 0, 200)
+    # خلفية داكنة غير شفافة لشريط العنوان
+    dark_bg_solid = (20, 20, 20, 255)  # أسود داكن غير شفاف
     
     font_sz  = max(28, int(W * 0.037))
     font_i   = load_font(font_sz)
@@ -306,7 +307,9 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, color_hex
                 gx=gx0+col*csp; gy=gy0+row*rsp
                 d.ellipse([gx-dot_r,gy-dot_r,gx+dot_r,gy+dot_r], fill=color)
     
-    # التاريخ والمكان (يظهران طيلة الفيديو)
+    # ========== الجزء الثابت (يظهر طيلة الفيديو) ==========
+    
+    # 1. التاريخ والمكان (أعلى الفيديو)
     if date_str:
         tw, th = get_tw(draw_perm, date_str, font_i)
         text_cy = info_y + th // 2
@@ -324,23 +327,40 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, color_hex
         draw_perm.text((loc_tx,   info_y),   location, font=font_i, fill=white)
         draw_icon_location(draw_perm, ic_cx2, text_cy2, icon_sz, white)
     
-    # badge عمودي على اليسار لـ visibility_badge (متداول - @مصدر) - يظهر طيلة الفيديو
-    if visibility_badge:
+    # 2. @مصدر عمودي على اليسار
+    if source_badge:
         badge_sz = max(26, int(W * 0.030))
         font_b   = load_font(badge_sz)
-        bw, bh   = get_tw(draw_perm, visibility_badge, font_b)
+        bw, bh   = get_tw(draw_perm, source_badge, font_b)
         margin   = int(badge_sz * 0.35)
         tmp      = Image.new("RGBA", (bw + margin*2, bh + margin*2), (0, 0, 0, 0))
         td       = ImageDraw.Draw(tmp)
-        td.text((margin+1, margin+1), visibility_badge, font=font_b, fill=shadow)
-        td.text((margin,   margin),   visibility_badge, font=font_b, fill=white)
+        td.text((margin+1, margin+1), source_badge, font=font_b, fill=shadow)
+        td.text((margin,   margin),   source_badge, font=font_b, fill=white)
         rotated  = tmp.rotate(90, expand=True)
         img_perm.paste(rotated, (4, (H - rotated.height) // 2), rotated)
+    
+    # 3. متداول/خاص (أسفل الفيديو، تحت شريط العنوان)
+    if visibility_badge:
+        visibility_font = load_font(max(32, int(W * 0.038)))
+        vw, vh = get_tw(draw_perm, visibility_badge, visibility_font)
+        v_margin = int(H * 0.025)
+        v_x = (W - vw) // 2
+        v_y = H - vh - v_margin
+        
+        # خلفية شفافة خفيفة للرؤية
+        bg_padding = int(vh * 0.3)
+        draw_perm.rectangle(
+            [v_x - bg_padding, v_y - bg_padding//2, v_x + vw + bg_padding, v_y + vh + bg_padding//2],
+            fill=(0, 0, 0, 100)
+        )
+        draw_perm.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
+        draw_perm.text((v_x, v_y), visibility_badge, font=visibility_font, fill=white)
     
     img_perm.save("/tmp/overlay_permanent.png", "PNG")
     print("✅ overlay_permanent.png (chouf2)")
     
-    # ── شريط العنوان بخلفية داكنة (يختفي بعد 12 ثانية) ─────────────
+    # ========== شريط العنوان (يختفي بعد 12 ثانية) ==========
     img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_title = ImageDraw.Draw(img_title)
     
@@ -348,24 +368,31 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, color_hex
         font_size  = 40
         font_t     = load_font(font_size)
         bar_pad_h  = int(W * 0.045)
-        bar_pad_v  = int(H * 0.016)
-        bar_w      = int(W * 0.78)
+        bar_pad_v  = int(H * 0.018)
+        bar_w      = int(W * 0.85)
         usable     = bar_w - 2 * bar_pad_h
         lines      = wrap_text(draw_title, title, font_t, usable)
         line_h     = int(font_size * 1.55)
         bar_h      = len(lines) * line_h + 2 * bar_pad_v
         bar_x      = (W - bar_w) // 2
-        bar_y      = H - bar_h - int(H * 0.22)
         
-        # خلفية داكنة لشريط العنوان
-        draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=dark_bg)
+        # نضع الشريط أعلى كلمة "متداول" بقليل
+        visibility_height = 0
+        if visibility_badge:
+            visibility_font = load_font(max(32, int(W * 0.038)))
+            _, vh = get_tw(draw_title, visibility_badge, visibility_font)
+            visibility_height = vh + int(H * 0.025)
+        
+        bar_y = H - bar_h - visibility_height - int(H * 0.015)
+        
+        # خلفية داكنة غير شفافة (صلبة)
+        draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=dark_bg_solid)
         
         for i, line in enumerate(lines):
             lw, _ = get_tw(draw_title, line, font_t)
             tx = bar_x + (bar_w - lw) // 2
             ty = bar_y + bar_pad_v + i * line_h
-            draw_title.text((tx+2, ty+2), line, font=font_t, fill=(0,0,0,110))
-            draw_title.text((tx,   ty),   line, font=font_t, fill=(255,255,255,255))
+            draw_title.text((tx, ty), line, font=font_t, fill=white)
     
     if title:
         img_title.save("/tmp/overlay_title.png", "PNG")
@@ -1006,9 +1033,9 @@ for pub in target_pubs:
     else:
         print(f"  ⚠️ PNG Frame غير متاح — سيُنشر بدونه")
 
-    # ── Overlay (يستخدم VISIBILITY_BADGE الذي يتضمن المصدر) ──
+    # ── Overlay ───────────────────────────────────────────────
     if name == "chouf2":
-        render_overlay_chouf2(video_title, VIDEO_LOCATION, VIDEO_DATE, VISIBILITY_BADGE, color, W, H)
+        render_overlay_chouf2(video_title, VIDEO_LOCATION, VIDEO_DATE, VISIBILITY_BADGE, SOURCE_BADGE, color, W, H)
     elif name == "test":
         render_overlay_test(video_title, VIDEO_LOCATION, VIDEO_DATE, VISIBILITY_BADGE, color, W, H)
     else:
