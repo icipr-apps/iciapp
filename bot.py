@@ -886,15 +886,30 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
 
     # ── إشعار panel.php برابط الفيديو الجاهز ──────────────────
     if PANEL_CALLBACK_URL and PANEL_SECRET:
+        payload = {
+            "secret":    PANEL_SECRET,
+            "video_url": url,
+            "title":     video_title or short_title,
+            "publisher": pub_name,
+            "post_text": final_post_text,
+        }
         try:
-            requests.post(PANEL_CALLBACK_URL, json={
-                "secret":    PANEL_SECRET,
-                "video_url": url,
-                "title":     video_title or short_title,
-                "publisher": pub_name,
-                "post_text": final_post_text,
-            }, timeout=15)
-            print(f"  📲 Panel notified → {pub_name}")
+            # أرسل POST مع عدم اتباع الـ redirect تلقائياً
+            r1 = requests.post(
+                PANEL_CALLBACK_URL, json=payload,
+                timeout=15, allow_redirects=False
+            )
+            # إذا كان هناك redirect (301/302) أعِد الإرسال للـ URL الجديد
+            if r1.status_code in (301, 302, 307, 308):
+                final_url = r1.headers.get("Location", PANEL_CALLBACK_URL)
+                # حافظ على ?action=callback في الـ URL الجديد
+                if "action=callback" not in final_url:
+                    sep = "&" if "?" in final_url else "?"
+                    final_url += sep + "action=callback"
+                r2 = requests.post(final_url, json=payload, timeout=15)
+                print(f"  📲 Panel notified (after redirect {r1.status_code}) → {pub_name} | HTTP {r2.status_code}")
+            else:
+                print(f"  📲 Panel notified → {pub_name} | HTTP {r1.status_code}")
         except Exception as e:
             print(f"  ⚠️ Panel notify failed: {e}")
 
