@@ -601,8 +601,8 @@ def apply_overlay(main, out, dur):
     perm_png  = "/tmp/overlay_permanent.png"
     title_png = "/tmp/overlay_title.png"
     loop_dur  = dur + 2
-    show_start = 1.2
-    fade_in    = 0.8
+    show_start = 0.0
+    fade_in    = 0.3
     title_hide = 12.0
     fade_out   = 0.6
 
