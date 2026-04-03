@@ -602,7 +602,7 @@ def apply_overlay(main, out, dur):
     title_png = "/tmp/overlay_title.png"
     loop_dur  = dur + 2
     
-    title_hide = 12.0     # يختفي بعد 12 ثانية
+    title_hide = 8.0     # يختفي بعد 12 ثانية
     fade_out   = 0.2      # fade-out عند الاختفاء فقط
 
     has_perm  = os.path.exists(perm_png)
