@@ -601,25 +601,22 @@ def apply_overlay(main, out, dur):
     perm_png  = "/tmp/overlay_permanent.png"
     title_png = "/tmp/overlay_title.png"
     loop_dur  = dur + 2
-    show_start = 0.0
-    # تم تعديل قيم fade_in و fade_out لشريط العنوان فقط
-    title_fade_in = 0.0      # يظهر فوراً من أول فريم (بدون fade-in)
-    title_hide    = 12.0     # يختفي بعد 12 ثانية
-    title_fade_out = 0.2     # fade-out سريع جداً عند الاختفاء (يمكنك جعله 0 أيضاً)
-
-    # للعناصر الثابتة (مثل المكان والتاريخ) يمكننا إبقاء fade-in خفيف أو جعله فورياً أيضاً
-    perm_fade_in = 0.0        # تغيير هذه القيمة إلى 0 لجعلها فورية أيضاً، أو 0.2 لتبدو أفضل
+    
+    title_hide = 12.0     # يختفي بعد 12 ثانية
+    fade_out   = 0.2      # fade-out عند الاختفاء فقط
 
     has_perm  = os.path.exists(perm_png)
     has_title = os.path.exists(title_png)
 
+    # ── الحالة 1: عند وجود Permanent و Title ──────────────────────
     if has_perm and has_title:
+        # Permanent: fade-in بسيط (اختياري)
+        # Title: يظهر فوراً بدون fade-in، ثم يختفي مع fade-out
         fc = (
             f"[1:v]format=yuva420p,"
-            f"fade=t=in:st={show_start}:d={perm_fade_in}:alpha=1[perm];"
+            f"fade=t=in:st=0:d=0.2:alpha=1[perm];"
             f"[2:v]format=yuva420p,"
-            f"fade=t=in:st={show_start}:d={title_fade_in}:alpha=1,"  # يظهر فوراً
-            f"fade=t=out:st={title_hide}:d={title_fade_out}:alpha=1[ttl];"
+            f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
             f"[0:v][perm]overlay=0:0[tmp];"
             f"[tmp][ttl]overlay=0:0[v]"
         )
@@ -634,15 +631,16 @@ def apply_overlay(main, out, dur):
                 capture_output=True, text=True, timeout=600
             )
             if os.path.exists(out) and os.path.getsize(out) > 1000:
-                print("  ✅ (split overlay - title appears instantly)")
+                print("  ✅ (العنوان يظهر فوراً من أول فريم)")
                 return True
-            if os.path.exists(out): os.remove(out)
+            if os.path.exists(out): 
+                os.remove(out)
 
-    # ── Permanent فقط (بدون عنوان) ──────────────────────────────
+    # ── الحالة 2: Permanent فقط (بدون عنوان) ──────────────────────
     if has_perm and not has_title:
         fc_perm = (
             f"[1:v]format=yuva420p,"
-            f"fade=t=in:st={show_start}:d={perm_fade_in}:alpha=1[perm];"
+            f"fade=t=in:st=0:d=0.2:alpha=1[perm];"
             f"[0:v][perm]overlay=0:0[v]"
         )
         for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
@@ -657,14 +655,15 @@ def apply_overlay(main, out, dur):
             if os.path.exists(out) and os.path.getsize(out) > 1000:
                 print("  ✅ (permanent only)")
                 return True
-            if os.path.exists(out): os.remove(out)
+            if os.path.exists(out): 
+                os.remove(out)
 
-    # ── Title فقط (fallback) ─────────────────────────────────────
+    # ── الحالة 3: Title فقط (بدون Permanent) ──────────────────────
     if has_title:
+        # العنوان يظهر فوراً بدون أي fade-in، ويختفي بعد 12 ثانية مع fade-out
         fc2 = (
             f"[1:v]format=yuva420p,"
-            f"fade=t=in:st={show_start}:d={title_fade_in}:alpha=1," # يظهر فوراً
-            f"fade=t=out:st={title_hide}:d={title_fade_out}:alpha=1[ttl];"
+            f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
             f"[0:v][ttl]overlay=0:0[v]"
         )
         for maps in [["-map","[v]","-map","0:a"], ["-map","[v]"]]:
@@ -677,11 +676,13 @@ def apply_overlay(main, out, dur):
                 capture_output=True, text=True, timeout=600
             )
             if os.path.exists(out) and os.path.getsize(out) > 1000:
-                print("  ✅ (title only - appears instantly)")
+                print("  ✅ (العنوان فقط - يظهر فوراً من أول فريم)")
                 return True
-            if os.path.exists(out): os.remove(out)
+            if os.path.exists(out): 
+                os.remove(out)
 
-    print("  ❌"); return False
+    print("  ❌ فشل تطبيق الـ Overlay")
+    return False
 
 
 # ══════════════════════════════════════════════════════════════
