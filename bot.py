@@ -918,7 +918,7 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
         )
         all_ids = [r["public_id"] for r in resources.get("resources", [])]
         # احتفظ بآخر 2 (الفيديو الحالي + الفيديو السابق)
-        to_delete = all_ids[2:]
+        to_delete = all_ids[1:]
         if to_delete:
             cloudinary.api.delete_resources(to_delete, resource_type="video")
             print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم")
