@@ -22,9 +22,8 @@ VIDEO_DATE        = os.environ.get("VIDEO_DATE",         "").strip()
 VIDEO_VISIBILITY  = os.environ.get("VIDEO_VISIBILITY",   "متداول").strip()
 VIDEO_SOURCE      = os.environ.get("VIDEO_SOURCE",       "").strip()
 
-# ── نص الـ badge ──────────────────────────────────────────────
-SOURCE_BADGE = f"@{VIDEO_SOURCE}" if VIDEO_SOURCE else ""
-VISIBILITY_BADGE = VIDEO_VISIBILITY  # متداول أو خاص
+SOURCE_BADGE     = f"@{VIDEO_SOURCE}" if VIDEO_SOURCE else ""
+VISIBILITY_BADGE = VIDEO_VISIBILITY
 
 print(f"👤 {VIDEO_PUBLISHER} | 📍 {VIDEO_LOCATION or '—'} | 📅 {VIDEO_DATE or '—'} | 🔒 {VISIBILITY_BADGE} | 📌 {SOURCE_BADGE}")
 if VIDEO_POST_TEXT:
@@ -51,7 +50,6 @@ def load_font(size):
     return ImageFont.load_default()
 
 def load_alnahar_font(size):
-    """تحميل خط AlNahar من woff2 مع تحويل تلقائي إلى TTF عند الحاجة"""
     from PIL import ImageFont
     base_dir   = os.path.dirname(os.path.abspath(__file__))
     ttf_path   = os.path.join(base_dir, "alnahar.ttf")
@@ -124,9 +122,8 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
         head_r  = R * 0.62
         head_cy = cy - R * 0.28
         pts = []
-        steps = 40
-        for i in range(steps + 1):
-            angle = math.pi + (math.pi * i / steps)
+        for i in range(41):
+            angle = math.pi + (math.pi * i / 40)
             pts.append((cx + head_r * math.cos(angle),
                         head_cy + head_r * math.sin(angle)))
         tip_y  = cy + R * 0.95
@@ -137,8 +134,7 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
         pts.append((cx - hw, base_y))
         d.polygon(pts, outline=color, width=lw)
         ir = max(3, int(head_r * 0.38))
-        d.ellipse([cx-ir, head_cy-ir, cx+ir, head_cy+ir],
-                  outline=color, width=lw)
+        d.ellipse([cx-ir, head_cy-ir, cx+ir, head_cy+ir], outline=color, width=lw)
 
     def draw_icon_calendar(d, cx, cy, R, color):
         lw  = max(3, int(R * 0.17))
@@ -245,23 +241,23 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
 def render_overlay_chouf2(title, location, date_str, visibility_badge, source_badge, color_hex, W, H):
     from PIL import Image, ImageDraw, ImageFilter
     import math
-    
+
     white  = (255, 255, 255, 255)
     shadow = (0,   0,   0,   160)
-    
+
     bg_color     = (74, 24, 22, 255)
     border_color = (255, 255, 255, 255)
     border_width = 2
-    
+
     font_sz  = max(28, int(W * 0.030))
     font_i   = load_font(font_sz)
     icon_sz  = int(font_sz * 0.42)
     margin_x = int(W * 0.037)
     info_y   = int(H * 0.038)
-    
+
     img_perm  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_perm = ImageDraw.Draw(img_perm)
-    
+
     def draw_icon_location(d, cx, cy, R, color):
         lw = max(3, int(R*0.18))
         head_r = R*0.62; head_cy = cy - R*0.28
@@ -274,7 +270,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         d.polygon(pts, outline=color, width=lw)
         ir = max(3, int(head_r*0.38))
         d.ellipse([cx-ir,head_cy-ir,cx+ir,head_cy+ir], outline=color, width=lw)
-    
+
     def draw_icon_calendar(d, cx, cy, R, color):
         lw = max(3, int(R*0.17))
         x0=cx-R; x1=cx+R; y0=cy-int(R*0.80); y1=cy+int(R*0.90)
@@ -299,54 +295,34 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
 
     if date_str:
         bb = draw_perm.textbbox((0, 0), date_str, font=font_i)
-        tw = bb[2] - bb[0]
-        th = bb[3] - bb[1]
-        t_offset_y = bb[1]
-
+        tw = bb[2] - bb[0]; th = bb[3] - bb[1]; t_offset_y = bb[1]
         total_inner_w = tw + inner_gap + icon_sz * 2
         box_w = total_inner_w + 2 * padding_h
         box_h = max(th, icon_sz * 2) + 2 * padding_v
-
-        box_x = margin_x
-        box_y = info_y
-
-        draw_perm.rectangle(
-            [box_x, box_y, box_x + box_w, box_y + box_h],
-            outline=border_color, width=border_width
-        )
-
+        box_x = margin_x; box_y = info_y
+        draw_perm.rectangle([box_x, box_y, box_x+box_w, box_y+box_h],
+                             outline=border_color, width=border_width)
         text_y = box_y + (box_h - th) // 2 - t_offset_y
         text_x = box_x + padding_h
         draw_perm.text((text_x+2, text_y+2), date_str, font=font_i, fill=shadow)
         draw_perm.text((text_x,   text_y),   date_str, font=font_i, fill=white)
-
         ic_cx = text_x + tw + inner_gap + icon_sz
         ic_cy = box_y + box_h // 2
         draw_icon_calendar(draw_perm, ic_cx, ic_cy, icon_sz, white)
 
     if location:
         bb2 = draw_perm.textbbox((0, 0), location, font=font_i)
-        tw2 = bb2[2] - bb2[0]
-        th2 = bb2[3] - bb2[1]
-        t_offset_y2 = bb2[1]
-
+        tw2 = bb2[2]-bb2[0]; th2 = bb2[3]-bb2[1]; t_offset_y2 = bb2[1]
         total_inner_w2 = tw2 + inner_gap + icon_sz * 2
         box_w2 = total_inner_w2 + 2 * padding_h
         box_h2 = max(th2, icon_sz * 2) + 2 * padding_v
-
-        box_x2 = W - margin_x - box_w2
-        box_y2 = info_y
-
-        draw_perm.rectangle(
-            [box_x2, box_y2, box_x2 + box_w2, box_y2 + box_h2],
-            outline=border_color, width=border_width
-        )
-
+        box_x2 = W - margin_x - box_w2; box_y2 = info_y
+        draw_perm.rectangle([box_x2, box_y2, box_x2+box_w2, box_y2+box_h2],
+                             outline=border_color, width=border_width)
         text_y2 = box_y2 + (box_h2 - th2) // 2 - t_offset_y2
         text_x2 = box_x2 + padding_h
         draw_perm.text((text_x2+2, text_y2+2), location, font=font_i, fill=shadow)
         draw_perm.text((text_x2,   text_y2),   location, font=font_i, fill=white)
-
         ic_cx2 = text_x2 + tw2 + inner_gap + icon_sz
         ic_cy2 = box_y2 + box_h2 // 2
         draw_icon_location(draw_perm, ic_cx2, ic_cy2, icon_sz, white)
@@ -369,9 +345,8 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         bg_padding = int(vh * 0.5)
         v_x = (W - vw) // 2
         v_y = H - vh - int(H * 0.12)
-
-        rect_coords = [v_x - bg_padding, v_y - bg_padding//2,
-                       v_x + vw + bg_padding, v_y + vh + bg_padding//2]
+        rect_coords = [v_x-bg_padding, v_y-bg_padding//2,
+                       v_x+vw+bg_padding, v_y+vh+bg_padding//2]
         draw_perm.rectangle(rect_coords, fill=bg_color)
         draw_perm.rectangle(rect_coords, outline=border_color, width=border_width)
         draw_perm.text((v_x+2, v_y+2), visibility_badge, font=visibility_font, fill=shadow)
@@ -388,27 +363,22 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         font_t     = load_font(font_size)
         bar_pad_h  = int(W * 0.045)
         bar_pad_v  = int(H * 0.018)
-
-        bar_w  = 765
-        if bar_w > W:
-            bar_w = W - 40
-
-        usable = bar_w - 2 * bar_pad_h
-        lines  = wrap_text(draw_title, title, font_t, usable)
-        line_h = int(font_size * 1.55)
-        bar_h  = len(lines) * line_h + 2 * bar_pad_v
-        bar_x  = (W - bar_w) // 2
+        bar_w      = 765 if 765 <= W else W - 40
+        usable     = bar_w - 2 * bar_pad_h
+        lines      = wrap_text(draw_title, title, font_t, usable)
+        line_h     = int(font_size * 1.55)
+        bar_h      = len(lines) * line_h + 2 * bar_pad_v
+        bar_x      = (W - bar_w) // 2
 
         if visibility_badge:
             visibility_font = load_font(max(28, int(W * 0.032)))
-            _, vh = get_tw(draw_title, visibility_badge, visibility_font)
+            _, vh   = get_tw(draw_title, visibility_badge, visibility_font)
             v_margin = int(H * 0.008)
-            bar_y = H - bar_h - vh - int(H * 0.12) - v_margin
+            bar_y   = H - bar_h - vh - int(H * 0.12) - v_margin
         else:
             bar_y = H - bar_h - int(H * 0.12)
 
         draw_title.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h], fill=bg_color)
-
         for i, line in enumerate(lines):
             lw, _ = get_tw(draw_title, line, font_t)
             tx = bar_x + (bar_w - lw) // 2
@@ -423,6 +393,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
             os.remove("/tmp/overlay_title.png")
         print("ℹ️  لا عنوان → overlay_title.png محذوف (chouf2)")
     return "/tmp/overlay_title.png"
+
 
 # ══════════════════════════════════════════════════════════════
 #   Overlay مميز لـ test (AlNahar)
@@ -525,12 +496,11 @@ def render_overlay_test(title, location, date_str, visibility_badge, color_hex, 
         pad_v     = int(H * 0.018)
         bar_w     = W - int(W * 0.25)
         usable    = bar_w - 2 * pad_h
-
-        lines  = wrap_text(draw_title, title, font_t, usable)
-        line_h = int(font_size * 1.5)
-        bar_h  = len(lines) * line_h + 2 * pad_v
-        bar_x  = (W - bar_w) // 2
-        bar_y  = H - bar_h - int(H * 0.22)
+        lines     = wrap_text(draw_title, title, font_t, usable)
+        line_h    = int(font_size * 1.5)
+        bar_h     = len(lines) * line_h + 2 * pad_v
+        bar_x     = (W - bar_w) // 2
+        bar_y     = H - bar_h - int(H * 0.22)
 
         draw_title.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=title_bg)
         for i, line in enumerate(lines):
@@ -579,7 +549,7 @@ def apply_overlay(main, out, dur):
     perm_png  = "/tmp/overlay_permanent.png"
     title_png = "/tmp/overlay_title.png"
     loop_dur  = dur + 2
-    
+
     title_hide = 8.0
     fade_out   = 0.2
 
@@ -608,7 +578,7 @@ def apply_overlay(main, out, dur):
             if os.path.exists(out) and os.path.getsize(out) > 1000:
                 print("  ✅ (العنوان يظهر فوراً من أول فريم)")
                 return True
-            if os.path.exists(out): 
+            if os.path.exists(out):
                 os.remove(out)
 
     if has_perm and not has_title:
@@ -629,7 +599,7 @@ def apply_overlay(main, out, dur):
             if os.path.exists(out) and os.path.getsize(out) > 1000:
                 print("  ✅ (permanent only)")
                 return True
-            if os.path.exists(out): 
+            if os.path.exists(out):
                 os.remove(out)
 
     if has_title:
@@ -650,7 +620,7 @@ def apply_overlay(main, out, dur):
             if os.path.exists(out) and os.path.getsize(out) > 1000:
                 print("  ✅ (العنوان فقط - يظهر فوراً من أول فريم)")
                 return True
-            if os.path.exists(out): 
+            if os.path.exists(out):
                 os.remove(out)
 
     print("  ❌ فشل تطبيق الـ Overlay")
@@ -672,7 +642,6 @@ def clean_title(raw):
     return raw.strip()
 
 def is_direct_video_url(url):
-    """هل الرابط رابط فيديو مباشر (لا يحتاج yt-dlp)؟"""
     return (url.endswith(".mp4") or
             "cloudinary.com" in url or
             "fbcdn" in url or
@@ -682,54 +651,32 @@ def is_direct_video_url(url):
 
 def fetch_latest_from_page(page_url):
     print(f"🔍 جلب آخر فيديو من: {page_url}")
-
     has_cookies = os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 50
     attempts = []
 
     if has_cookies:
-        attempts.append({
-            "label": "print+cookies",
-            "cmd": ["yt-dlp", "--playlist-items", "1",
-                    "--print", "%(webpage_url)s",
-                    "--print", "%(title)s",
-                    "--cookies", COOKIES_FILE,
-                    "--no-warnings", page_url]
-        })
+        attempts.append({"label": "print+cookies",
+            "cmd": ["yt-dlp","--playlist-items","1","--print","%(webpage_url)s",
+                    "--print","%(title)s","--cookies",COOKIES_FILE,"--no-warnings",page_url]})
 
-    attempts.append({
-        "label": "print-no-cookies",
-        "cmd": ["yt-dlp", "--playlist-items", "1",
-                "--print", "%(webpage_url)s",
-                "--print", "%(title)s",
-                "--no-warnings", page_url]
-    })
+    attempts.append({"label": "print-no-cookies",
+        "cmd": ["yt-dlp","--playlist-items","1","--print","%(webpage_url)s",
+                "--print","%(title)s","--no-warnings",page_url]})
 
     if has_cookies:
-        attempts.append({
-            "label": "geturl+cookies",
-            "cmd": ["yt-dlp", "--playlist-items", "1",
-                    "--get-url", "--get-title",
-                    "--format", "best[ext=mp4]/best",
-                    "--cookies", COOKIES_FILE,
-                    "--no-warnings", page_url]
-        })
+        attempts.append({"label": "geturl+cookies",
+            "cmd": ["yt-dlp","--playlist-items","1","--get-url","--get-title",
+                    "--format","best[ext=mp4]/best","--cookies",COOKIES_FILE,
+                    "--no-warnings",page_url]})
 
-    attempts.append({
-        "label": "geturl-no-cookies",
-        "cmd": ["yt-dlp", "--playlist-items", "1",
-                "--get-url", "--get-title",
-                "--format", "best[ext=mp4]/best",
-                "--no-warnings", page_url]
-    })
+    attempts.append({"label": "geturl-no-cookies",
+        "cmd": ["yt-dlp","--playlist-items","1","--get-url","--get-title",
+                "--format","best[ext=mp4]/best","--no-warnings",page_url]})
 
     if has_cookies:
-        attempts.append({
-            "label": "flat+cookies",
-            "cmd": ["yt-dlp", "--flat-playlist", "--playlist-items", "1",
-                    "--print", "url",
-                    "--cookies", COOKIES_FILE,
-                    "--no-warnings", page_url]
-        })
+        attempts.append({"label": "flat+cookies",
+            "cmd": ["yt-dlp","--flat-playlist","--playlist-items","1",
+                    "--print","url","--cookies",COOKIES_FILE,"--no-warnings",page_url]})
 
     for att in attempts:
         print(f"  ⏳ {att['label']}...")
@@ -738,18 +685,15 @@ def fetch_latest_from_page(page_url):
             lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
             if r.returncode != 0:
                 print(f"    ⚠️ exit={r.returncode}: {r.stderr.strip()[-120:]}")
-
             if len(lines) >= 2:
                 url   = lines[0] if lines[0].startswith("http") else lines[1]
                 title = clean_title(lines[1] if lines[0].startswith("http") else lines[0])
                 if url.startswith("http"):
                     print(f"  ✅ {title[:70]}")
                     return url, title
-
             elif len(lines) == 1 and lines[0].startswith("http"):
                 print(f"  ✅ (رابط فقط بدون عنوان)")
                 return lines[0], ""
-
         except subprocess.TimeoutExpired:
             print(f"    ⏰ timeout")
         except Exception as e:
@@ -760,7 +704,6 @@ def fetch_latest_from_page(page_url):
 
 def download_video(url):
     out = "/tmp/main.mp4"
-
     if is_direct_video_url(url):
         print("📥 رابط مباشر → wget...")
         subprocess.run(["wget", "-q", "--show-progress", "-O", out, url], timeout=300)
@@ -770,19 +713,14 @@ def download_video(url):
 
     has_cookies = os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 50
     attempts = []
-
     if has_cookies:
         attempts.append(("cookies+mp4",
-            ["yt-dlp", "-o", out, "--format", "best[ext=mp4]/best",
-             "--cookies", COOKIES_FILE, "--no-warnings", "--no-playlist", url]))
-
+            ["yt-dlp","-o",out,"--format","best[ext=mp4]/best",
+             "--cookies",COOKIES_FILE,"--no-warnings","--no-playlist",url]))
     attempts.append(("direct+mp4",
-        ["yt-dlp", "-o", out, "--format", "best[ext=mp4]/best",
-         "--no-warnings", "--no-playlist", url]))
-
+        ["yt-dlp","-o",out,"--format","best[ext=mp4]/best","--no-warnings","--no-playlist",url]))
     attempts.append(("direct+best",
-        ["yt-dlp", "-o", out, "--format", "best",
-         "--no-warnings", "--no-playlist", url]))
+        ["yt-dlp","-o",out,"--format","best","--no-warnings","--no-playlist",url]))
 
     for label, cmd in attempts:
         print(f"📥 {label}...")
@@ -800,8 +738,7 @@ def download_video(url):
 
 def get_video_info(path):
     r = subprocess.run(
-        ["ffprobe", "-v", "quiet", "-print_format", "json",
-         "-show_streams", "-show_format", path],
+        ["ffprobe","-v","quiet","-print_format","json","-show_streams","-show_format",path],
         capture_output=True, text=True
     )
     try:
@@ -814,9 +751,9 @@ def get_video_info(path):
 def scale_to_target(src, out, tw=1080, th=1920):
     print(f"📐 {tw}×{th}...")
     r = subprocess.run(
-        ["ffmpeg", "-y", "-threads", "2", "-i", src,
-         "-vf", f"scale={tw}:{th}:force_original_aspect_ratio=increase,crop={tw}:{th},setsar=1",
-         "-c:v", "libx264", "-c:a", "aac", "-preset", "ultrafast", out],
+        ["ffmpeg","-y","-threads","2","-i",src,
+         "-vf",f"scale={tw}:{th}:force_original_aspect_ratio=increase,crop={tw}:{th},setsar=1",
+         "-c:v","libx264","-c:a","aac","-preset","ultrafast",out],
         capture_output=True, text=True, timeout=600
     )
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
@@ -871,16 +808,15 @@ def add_outro(main, outro, out, W, H):
     ok = os.path.exists(out) and os.path.getsize(out) > 1000
     print("  ✅ (concat)" if ok else "  ❌"); return ok
 
-
 def compress_for_upload(src, out, max_mb=95):
     size_mb = os.path.getsize(src) / 1024 / 1024
     if size_mb <= max_mb:
         return src
     print(f"  📦 ضغط ({size_mb:.1f}MB > {max_mb}MB)...")
     subprocess.run(
-        ["ffmpeg", "-y", "-threads", "2", "-i", src,
-         "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast",
-         "-c:a", "aac", "-b:a", "128k", out],
+        ["ffmpeg","-y","-threads","2","-i",src,
+         "-c:v","libx264","-crf","28","-preset","ultrafast",
+         "-c:a","aac","-b:a","128k",out],
         capture_output=True, text=True, timeout=300
     )
     if os.path.exists(out) and os.path.getsize(out) > 1000:
@@ -895,7 +831,8 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     print(f"  📤 رفع — {mb:.1f}MB")
 
     safe      = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
-    public_id = f"tmp_{safe}"
+    timestamp = int(time.time())
+    public_id = f"tmp_{safe}_{timestamp}"   # ← public_id فريد لكل رفع
 
     result = cloudinary.uploader.upload(
         video_path, resource_type="video",
@@ -904,38 +841,35 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     url = result["secure_url"]
     print(f"  ✅ رُفع: {url[:70]}")
 
-    # ── حذف الفيديوهات القديمة ──────────────────────────────
+    # ── حذف الفيديوهات القديمة لنفس الناشر فقط ─────────────
     try:
-        import cloudinary.api as cloudinary_api   # ← اسم مستعار مختلف
+        import cloudinary.api as cloudinary_api
         resources = cloudinary_api.resources(
             resource_type="video",
             type="upload",
-            prefix="tmp_",
+            prefix=f"tmp_{safe}_",   # ← prefix خاص بهذا الناشر فقط
             max_results=50,
             direction="desc",
         )
-        all_ids  = [r["public_id"] for r in resources.get("resources", [])]
-        to_delete = all_ids[1:]
+        all_ids   = [r["public_id"] for r in resources.get("resources", [])]
+        to_delete = all_ids[1:]      # ← احتفظ بالأحدث فقط واحذف الباقي
         if to_delete:
             cloudinary_api.delete_resources(to_delete, resource_type="video")
-            print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم")
+            print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم لـ {pub_name}")
     except Exception as e:
         print(f"  ⚠️ فشل حذف القديم: {e}")
 
-    # نص المنشور: إذا فارغ يُستخدم العنوان كبديل
+    # نص المنشور
     final_post_text = post_text or video_title
 
-    # ── عنوان قصير ≤95 حرف لـ YouTube وما شابه ──────────────────
     def make_short_title(text, max_len=95):
-        if not text:
-            return ""
+        if not text: return ""
         first_line = text.split("\n")[0].strip()
         clean = re.sub(r"#\S+", "", first_line)
         clean = re.sub(r"@\S+", "", clean)
         clean = re.sub(r"https?://\S+", "", clean)
         clean = re.sub(r"\s+", " ", clean).strip()
-        if not clean:
-            clean = first_line
+        if not clean: clean = first_line
         if len(clean) > max_len:
             clean = clean[:max_len - 1].rstrip() + "…"
         return clean
@@ -953,7 +887,6 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     }, timeout=30)
     print(f"  📡 Webhook أُرسل → {pub_name}")
 
-    # ── إشعار panel.php برابط الفيديو الجاهز ──────────────────
     if PANEL_CALLBACK_URL and PANEL_SECRET:
         payload = {
             "secret":    PANEL_SECRET,
@@ -963,10 +896,8 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
             "post_text": final_post_text,
         }
         try:
-            r1 = requests.post(
-                PANEL_CALLBACK_URL, json=payload,
-                timeout=15, allow_redirects=False
-            )
+            r1 = requests.post(PANEL_CALLBACK_URL, json=payload,
+                               timeout=15, allow_redirects=False)
             if r1.status_code in (301, 302, 307, 308):
                 final_url = r1.headers.get("Location", PANEL_CALLBACK_URL)
                 if "action=callback" not in final_url:
@@ -1004,7 +935,6 @@ config   = load_config()
 all_pubs = config["publishers"]
 sources  = config.get("sources", [])
 
-# ── تحليل الناشرين: ALL أو comma-separated ──────────────────
 if VIDEO_PUBLISHER.upper() == "ALL":
     target_pubs = all_pubs
 else:
@@ -1016,7 +946,6 @@ else:
 
 print(f"📋 الصفحات: {[p['name'] for p in target_pubs]}")
 
-# ── دعم رابط مباشر ───────────────────────────────────────────
 if VIDEO_URL_INPUT:
     print(f"🔗 رابط مباشر: {VIDEO_URL_INPUT[:80]}")
     video_url   = VIDEO_URL_INPUT
@@ -1035,10 +964,8 @@ print(f"✏️  العنوان (على الفيديو): {video_title}")
 if VIDEO_POST_TEXT:
     print(f"📝 نص المنشور: {VIDEO_POST_TEXT[:60]}...")
 
-# تحميل الفيديو
 if not download_video(video_url): exit(1)
 
-# معلومات وتحجيم
 src_w, src_h, dur = get_video_info("/tmp/main.mp4")
 print(f"📏 {src_w}×{src_h} | {dur:.1f}s")
 
@@ -1058,7 +985,6 @@ for pub in target_pubs:
     print(f"\n📺 {name}")
     current = main_ready
 
-    # ── PNG Frame ─────────────────────────────────────────────
     frame_local = f"/tmp/frame_{name}.png"
     framed_out  = f"/tmp/framed_{name}.mp4"
     if download_from_cloudinary(pub["frame_png_id"], frame_local, resource_type="image"):
@@ -1067,7 +993,6 @@ for pub in target_pubs:
     else:
         print(f"  ⚠️ PNG Frame غير متاح — سيُنشر بدونه")
 
-    # ── Overlay ───────────────────────────────────────────────
     if name == "chouf2":
         render_overlay_chouf2(video_title, VIDEO_LOCATION, VIDEO_DATE, VISIBILITY_BADGE, SOURCE_BADGE, color, W, H)
     elif name == "test":
@@ -1079,14 +1004,12 @@ for pub in target_pubs:
     if apply_overlay(current, titled_out, dur):
         current = titled_out
 
-    # ── Outro ─────────────────────────────────────────────────
     outro_in  = f"/tmp/outro_{name}.mp4"
     final_out = f"/tmp/final_{name}.mp4"
     if download_from_cloudinary(pub["outro_id"], outro_in):
         if add_outro(current, outro_in, final_out, W, H):
             current = final_out
 
-    # ── رفع وإرسال ────────────────────────────────────────────
     try:
         upload_and_send(current, name, video_title, VIDEO_POST_TEXT, video_url)
         success += 1
