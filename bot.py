@@ -99,13 +99,7 @@ def wrap_text(draw, text, font, max_w):
 
 
 # ══════════════════════════════════════════════════════════════
-#   رسم الـ Overlay الكامل — مقسّم إلى ملفين:
-#
-#   overlay_permanent.png ← مكان + تاريخ + متداول/خاص (أسفل) + @مصدر (يسار)
-#                            يظهر fade-in ويبقى طول الفيديو
-#
-#   overlay_title.png     ← شريط العنوان فقط (خلفية #4a1816)
-#                            يظهر fade-in ويختفي بعد 12 ثانية
+#   رسم الـ Overlay الكامل
 # ══════════════════════════════════════════════════════════════
 
 def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H):
@@ -194,9 +188,7 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
             draw_icon_calendar(draw_perm, icon_cx, icon_cy + int(icon_sz * 0.18), icon_sz, (255,255,255,240))
         y += th + int(info_sz * 0.55)
 
-    # badge الجانبي: "@مصدر" مثلاً
     if visibility_badge and "متداول" in visibility_badge:
-        # هذا للـ visibility_badge في الناشرين العاديين
         badge_sz = max(26, int(W * 0.030))
         font_b   = load_font(badge_sz)
         bw, bh   = get_tw(draw_perm, visibility_badge, font_b)
@@ -211,7 +203,6 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
     img_perm.save("/tmp/overlay_permanent.png", "PNG")
     print("✅ overlay_permanent.png")
 
-    # ── Overlay 2: شريط العنوان فقط ───────────────────────────
     img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_title = ImageDraw.Draw(img_title)
 
@@ -241,7 +232,6 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
         img_title.save("/tmp/overlay_title.png", "PNG")
         print("✅ overlay_title.png")
     else:
-        # لا عنوان → لا نحفظ الملف حتى لا يظهر أي شريط
         if os.path.exists("/tmp/overlay_title.png"):
             os.remove("/tmp/overlay_title.png")
         print("ℹ️  لا عنوان → overlay_title.png محذوف")
@@ -250,10 +240,6 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
 
 # ══════════════════════════════════════════════════════════════
 #   Overlay مميز لـ chouf2
-#   - التاريخ والمكان يظهران طيلة الفيديو (أعلى)
-#   - متداول/خاص يظهر تحت شريط العنوان (أسفل) طيلة الفيديو مع خلفية #4a1816
-#   - @مصدر يظهر عمودي على اليسار مع إزاحة لليمين قليلاً
-#   - شريط العنوان بخلفية #4a1816 غير شفافة ويختفي بعد 12 ثانية
 # ══════════════════════════════════════════════════════════════
 
 def render_overlay_chouf2(title, location, date_str, visibility_badge, source_badge, color_hex, W, H):
@@ -261,7 +247,7 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
     import math
     
     white  = (255, 255, 255, 255)
-    shadow = (0, 0, 0, 160)
+    shadow = (0,   0,   0,   160)
     
     bg_color     = (74, 24, 22, 255)
     border_color = (255, 255, 255, 255)
@@ -307,18 +293,15 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
                 gx=gx0+col*csp; gy=gy0+row*rsp
                 d.ellipse([gx-dot_r,gy-dot_r,gx+dot_r,gy+dot_r], fill=color)
 
-    # ========== الجزء الثابت (يظهر طيلة الفيديو) ==========
-
     padding_h = 14
     padding_v = 8
     inner_gap = int(icon_sz * 0.6)
 
-    # 1. التاريخ مع إطار أبيض يشمل النص + الأيقونة
     if date_str:
         bb = draw_perm.textbbox((0, 0), date_str, font=font_i)
         tw = bb[2] - bb[0]
         th = bb[3] - bb[1]
-        t_offset_y = bb[1]  # الإزاحة العلوية الحقيقية للخط
+        t_offset_y = bb[1]
 
         total_inner_w = tw + inner_gap + icon_sz * 2
         box_w = total_inner_w + 2 * padding_h
@@ -332,7 +315,6 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
             outline=border_color, width=border_width
         )
 
-        # توسيط النص عمودياً مع تصحيح الـ offset
         text_y = box_y + (box_h - th) // 2 - t_offset_y
         text_x = box_x + padding_h
         draw_perm.text((text_x+2, text_y+2), date_str, font=font_i, fill=shadow)
@@ -342,12 +324,11 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         ic_cy = box_y + box_h // 2
         draw_icon_calendar(draw_perm, ic_cx, ic_cy, icon_sz, white)
 
-    # 2. المكان مع إطار أبيض يشمل النص + الأيقونة
     if location:
         bb2 = draw_perm.textbbox((0, 0), location, font=font_i)
         tw2 = bb2[2] - bb2[0]
         th2 = bb2[3] - bb2[1]
-        t_offset_y2 = bb2[1]  # الإزاحة العلوية الحقيقية للخط
+        t_offset_y2 = bb2[1]
 
         total_inner_w2 = tw2 + inner_gap + icon_sz * 2
         box_w2 = total_inner_w2 + 2 * padding_h
@@ -370,7 +351,6 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         ic_cy2 = box_y2 + box_h2 // 2
         draw_icon_location(draw_perm, ic_cx2, ic_cy2, icon_sz, white)
 
-    # 3. @مصدر عمودي على اليسار
     if source_badge:
         badge_sz = max(26, int(W * 0.030))
         font_b   = load_font(badge_sz)
@@ -383,7 +363,6 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
         rotated  = tmp.rotate(90, expand=True)
         img_perm.paste(rotated, (25, (H - rotated.height) // 2), rotated)
 
-    # 4. كلمة "متداول/خاص" مع خلفية وإطار أبيض
     if visibility_badge:
         visibility_font = load_font(max(28, int(W * 0.032)))
         vw, vh = get_tw(draw_perm, visibility_badge, visibility_font)
@@ -401,7 +380,6 @@ def render_overlay_chouf2(title, location, date_str, visibility_badge, source_ba
     img_perm.save("/tmp/overlay_permanent.png", "PNG")
     print("✅ overlay_permanent.png (chouf2)")
 
-    # ========== شريط العنوان (يختفي بعد 12 ثانية) ==========
     img_title  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_title = ImageDraw.Draw(img_title)
 
@@ -602,16 +580,13 @@ def apply_overlay(main, out, dur):
     title_png = "/tmp/overlay_title.png"
     loop_dur  = dur + 2
     
-    title_hide = 8.0     # يختفي بعد 12 ثانية
-    fade_out   = 0.2      # fade-out عند الاختفاء فقط
+    title_hide = 8.0
+    fade_out   = 0.2
 
     has_perm  = os.path.exists(perm_png)
     has_title = os.path.exists(title_png)
 
-    # ── الحالة 1: عند وجود Permanent و Title ──────────────────────
     if has_perm and has_title:
-        # Permanent: fade-in بسيط (اختياري)
-        # Title: يظهر فوراً بدون fade-in، ثم يختفي مع fade-out
         fc = (
             f"[1:v]format=yuva420p,"
             f"fade=t=in:st=0:d=0.2:alpha=1[perm];"
@@ -636,7 +611,6 @@ def apply_overlay(main, out, dur):
             if os.path.exists(out): 
                 os.remove(out)
 
-    # ── الحالة 2: Permanent فقط (بدون عنوان) ──────────────────────
     if has_perm and not has_title:
         fc_perm = (
             f"[1:v]format=yuva420p,"
@@ -658,9 +632,7 @@ def apply_overlay(main, out, dur):
             if os.path.exists(out): 
                 os.remove(out)
 
-    # ── الحالة 3: Title فقط (بدون Permanent) ──────────────────────
     if has_title:
-        # العنوان يظهر فوراً بدون أي fade-in، ويختفي بعد 12 ثانية مع fade-out
         fc2 = (
             f"[1:v]format=yuva420p,"
             f"fade=t=out:st={title_hide}:d={fade_out}:alpha=1[ttl];"
@@ -789,7 +761,6 @@ def fetch_latest_from_page(page_url):
 def download_video(url):
     out = "/tmp/main.mp4"
 
-    # ── رابط مباشر (Cloudinary, fbcdn, .mp4) → wget أولاً ──
     if is_direct_video_url(url):
         print("📥 رابط مباشر → wget...")
         subprocess.run(["wget", "-q", "--show-progress", "-O", out, url], timeout=300)
@@ -927,31 +898,32 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     safe      = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
     public_id = f"tmp_{safe}"
 
-result = cloudinary.uploader.upload(
-    video_path, resource_type="video",
-    public_id=public_id, overwrite=True,
-)
-url = result["secure_url"]
-print(f"  ✅ رُفع: {url[:70]}")
-
-# ── حذف الفيديوهات القديمة (الاحتفاظ بآخر 2 فقط) ──────────
-try:
-    import cloudinary.api
-    resources = cloudinary.api.resources(
-        resource_type="video",
-        type="upload",
-        prefix="tmp_",
-        max_results=50,
-        direction="desc",
+    # ✅ الإصلاح: كود الرفع داخل الدالة بشكل صحيح
+    result = cloudinary.uploader.upload(
+        video_path, resource_type="video",
+        public_id=public_id, overwrite=True,
     )
-    all_ids = [r["public_id"] for r in resources.get("resources", [])]
-    # احتفظ بآخر 2 (الفيديو الحالي + الفيديو السابق)
-    to_delete = all_ids[2:]
-    if to_delete:
-        cloudinary.api.delete_resources(to_delete, resource_type="video")
-        print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم")
-except Exception as e:
-    print(f"  ⚠️ فشل حذف القديم: {e}")
+    url = result["secure_url"]
+    print(f"  ✅ رُفع: {url[:70]}")
+
+    # ── حذف الفيديوهات القديمة (الاحتفاظ بآخر 2 فقط) ──────────
+    try:
+        import cloudinary.api
+        resources = cloudinary.api.resources(
+            resource_type="video",
+            type="upload",
+            prefix="tmp_",
+            max_results=50,
+            direction="desc",
+        )
+        all_ids = [r["public_id"] for r in resources.get("resources", [])]
+        # احتفظ بآخر 2 (الفيديو الحالي + الفيديو السابق)
+        to_delete = all_ids[2:]
+        if to_delete:
+            cloudinary.api.delete_resources(to_delete, resource_type="video")
+            print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم")
+    except Exception as e:
+        print(f"  ⚠️ فشل حذف القديم: {e}")
 
     # نص المنشور: إذا فارغ يُستخدم العنوان كبديل
     final_post_text = post_text or video_title
@@ -961,25 +933,24 @@ except Exception as e:
         if not text:
             return ""
         first_line = text.split("\n")[0].strip()
-        clean = re.sub(r"#\S+", "", first_line)   # أحذف #هاشتاغات
-        clean = re.sub(r"@\S+", "", clean)         # أحذف @إشارات
-        clean = re.sub(r"https?://\S+", "", clean) # أحذف روابط
+        clean = re.sub(r"#\S+", "", first_line)
+        clean = re.sub(r"@\S+", "", clean)
+        clean = re.sub(r"https?://\S+", "", clean)
         clean = re.sub(r"\s+", " ", clean).strip()
         if not clean:
-            clean = first_line                     # fallback: السطر الأول كما هو
+            clean = first_line
         if len(clean) > max_len:
             clean = clean[:max_len - 1].rstrip() + "…"
         return clean
 
-    # الأولوية: عنوان الفيديو المكتوب → أول سطر نظيف من نص المنشور
     short_title = video_title if video_title else make_short_title(final_post_text)
     print(f"  📌 عنوان قصير ({len(short_title)} حرف): {short_title[:60]}")
 
     requests.post(WEBHOOK_URL, json={
         "video_url":   url,
-        "title":       video_title,       # العنوان المرسوم على الفيديو (قد يكون فارغاً)
-        "title_short": short_title,       # ≤95 حرف بدون هاشتاغات — لـ YouTube وما شابه
-        "post_text":   final_post_text,   # نص المنشور الكامل — لـ Facebook وما شابه
+        "title":       video_title,
+        "title_short": short_title,
+        "post_text":   final_post_text,
         "publisher":   pub_name,
         "source_url":  source_url,
     }, timeout=30)
@@ -995,15 +966,12 @@ except Exception as e:
             "post_text": final_post_text,
         }
         try:
-            # أرسل POST مع عدم اتباع الـ redirect تلقائياً
             r1 = requests.post(
                 PANEL_CALLBACK_URL, json=payload,
                 timeout=15, allow_redirects=False
             )
-            # إذا كان هناك redirect (301/302) أعِد الإرسال للـ URL الجديد
             if r1.status_code in (301, 302, 307, 308):
                 final_url = r1.headers.get("Location", PANEL_CALLBACK_URL)
-                # حافظ على ?action=callback في الـ URL الجديد
                 if "action=callback" not in final_url:
                     sep = "&" if "?" in final_url else "?"
                     final_url += sep + "action=callback"
@@ -1055,7 +1023,7 @@ print(f"📋 الصفحات: {[p['name'] for p in target_pubs]}")
 if VIDEO_URL_INPUT:
     print(f"🔗 رابط مباشر: {VIDEO_URL_INPUT[:80]}")
     video_url   = VIDEO_URL_INPUT
-    video_title = VIDEO_TITLE_INPUT  # فارغ = لا عنوان على الفيديو
+    video_title = VIDEO_TITLE_INPUT
 else:
     if not sources:
         print("❌ لا توجد sources في config.json"); exit(1)
