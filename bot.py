@@ -927,12 +927,31 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     safe      = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
     public_id = f"tmp_{safe}"
 
-    result = cloudinary.uploader.upload(
-        video_path, resource_type="video",
-        public_id=public_id, overwrite=True,
+result = cloudinary.uploader.upload(
+    video_path, resource_type="video",
+    public_id=public_id, overwrite=True,
+)
+url = result["secure_url"]
+print(f"  ✅ رُفع: {url[:70]}")
+
+# ── حذف الفيديوهات القديمة (الاحتفاظ بآخر 2 فقط) ──────────
+try:
+    import cloudinary.api
+    resources = cloudinary.api.resources(
+        resource_type="video",
+        type="upload",
+        prefix="tmp_",
+        max_results=50,
+        direction="desc",
     )
-    url = result["secure_url"]
-    print(f"  ✅ رُفع: {url[:70]}")
+    all_ids = [r["public_id"] for r in resources.get("resources", [])]
+    # احتفظ بآخر 2 (الفيديو الحالي + الفيديو السابق)
+    to_delete = all_ids[2:]
+    if to_delete:
+        cloudinary.api.delete_resources(to_delete, resource_type="video")
+        print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم")
+except Exception as e:
+    print(f"  ⚠️ فشل حذف القديم: {e}")
 
     # نص المنشور: إذا فارغ يُستخدم العنوان كبديل
     final_post_text = post_text or video_title
