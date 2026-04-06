@@ -890,7 +890,6 @@ def compress_for_upload(src, out, max_mb=95):
     return src
 
 def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
-    """رفع الفيديو ثم إرسال الـ Webhook مع نص المنشور المنفصل عن العنوان"""
     video_path = compress_for_upload(video_path, video_path.replace(".mp4", "_cmp.mp4"))
     mb = os.path.getsize(video_path) / 1024 / 1024
     print(f"  📤 رفع — {mb:.1f}MB")
@@ -898,7 +897,6 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     safe      = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
     public_id = f"tmp_{safe}"
 
-    # ✅ الإصلاح: كود الرفع داخل الدالة بشكل صحيح
     result = cloudinary.uploader.upload(
         video_path, resource_type="video",
         public_id=public_id, overwrite=True,
@@ -906,21 +904,20 @@ def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
     url = result["secure_url"]
     print(f"  ✅ رُفع: {url[:70]}")
 
-    # ── حذف الفيديوهات القديمة (الاحتفاظ بآخر 2 فقط) ──────────
+    # ── حذف الفيديوهات القديمة ──────────────────────────────
     try:
-        import cloudinary.api
-        resources = cloudinary.api.resources(
+        import cloudinary.api as cloudinary_api   # ← اسم مستعار مختلف
+        resources = cloudinary_api.resources(
             resource_type="video",
             type="upload",
             prefix="tmp_",
             max_results=50,
             direction="desc",
         )
-        all_ids = [r["public_id"] for r in resources.get("resources", [])]
-        # احتفظ بآخر 2 (الفيديو الحالي + الفيديو السابق)
+        all_ids  = [r["public_id"] for r in resources.get("resources", [])]
         to_delete = all_ids[1:]
         if to_delete:
-            cloudinary.api.delete_resources(to_delete, resource_type="video")
+            cloudinary_api.delete_resources(to_delete, resource_type="video")
             print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم")
     except Exception as e:
         print(f"  ⚠️ فشل حذف القديم: {e}")
