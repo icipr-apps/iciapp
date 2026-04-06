@@ -112,9 +112,6 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
     img_perm  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_perm = ImageDraw.Draw(img_perm)
 
-    info_sz = max(30, int(W * 0.034))
-    font_i  = load_font(info_sz)
-
     import math
 
     def draw_icon_location(d, cx, cy, R, color):
@@ -164,6 +161,9 @@ def render_overlay(title, location, date_str, visibility_badge, color_hex, W, H)
     if location: info_items.append(("location", location))
     if date_str: info_items.append(("date",     date_str))
 
+    icon_sz   = int(info_sz := max(30, int(W * 0.034)), info_sz * 0.46)[1] if False else int(max(30, int(W * 0.034)) * 0.46)
+    info_sz   = max(30, int(W * 0.034))
+    font_i    = load_font(info_sz)
     icon_sz   = int(info_sz * 0.46)
     icon_gap  = int(info_sz * 0.28)
     y = int(H * 0.13)
@@ -825,39 +825,41 @@ def compress_for_upload(src, out, max_mb=95):
         return out
     return src
 
+# ══════════════════════════════════════════════════════════════
+#   الرفع على Cloudinary — public_id ثابت لكل publisher
+#   ✅ الإصلاح: لا timestamp عشوائي → URL ثابت ومستقر دائماً
+# ══════════════════════════════════════════════════════════════
+
 def upload_and_send(video_path, pub_name, video_title, post_text, source_url):
+    import cloudinary.api as cloudinary_api
+
     video_path = compress_for_upload(video_path, video_path.replace(".mp4", "_cmp.mp4"))
     mb = os.path.getsize(video_path) / 1024 / 1024
     print(f"  📤 رفع — {mb:.1f}MB")
 
     safe      = re.sub(r"[^a-z0-9]", "_", pub_name.lower())
-    timestamp = int(time.time())
-    public_id = f"tmp_{safe}_{timestamp}"   # ← public_id فريد لكل رفع
+    # ✅ public_id ثابت لكل publisher — overwrite=True يستبدل القديم تلقائياً
+    public_id = f"tmp_{safe}_latest"
 
+    # ✅ حذف الفيديو القديم أولاً قبل رفع الجديد
+    # هذا يضمن عدم وجود فيديوهات قديمة تتراكم على Cloudinary
+    try:
+        cloudinary_api.delete_resources([public_id], resource_type="video")
+        print(f"  🗑️ حُذف الفيديو القديم: {public_id}")
+    except Exception as e:
+        # لا بأس إن لم يكن موجوداً من قبل
+        print(f"  ℹ️ لا يوجد فيديو قديم أو فشل الحذف (طبيعي): {e}")
+
+    # ✅ رفع الفيديو الجديد بنفس الاسم الثابت
     result = cloudinary.uploader.upload(
-        video_path, resource_type="video",
-        public_id=public_id, overwrite=True,
+        video_path,
+        resource_type="video",
+        public_id=public_id,
+        overwrite=True,
+        invalidate=True,   # ✅ إلغاء الـ CDN cache فوراً
     )
     url = result["secure_url"]
     print(f"  ✅ رُفع: {url[:70]}")
-
-    # ── حذف الفيديوهات القديمة لنفس الناشر فقط ─────────────
-    try:
-        import cloudinary.api as cloudinary_api
-        resources = cloudinary_api.resources(
-            resource_type="video",
-            type="upload",
-            prefix=f"tmp_{safe}_",   # ← prefix خاص بهذا الناشر فقط
-            max_results=50,
-            direction="desc",
-        )
-        all_ids   = [r["public_id"] for r in resources.get("resources", [])]
-        to_delete = all_ids[1:]      # ← احتفظ بالأحدث فقط واحذف الباقي
-        if to_delete:
-            cloudinary_api.delete_resources(to_delete, resource_type="video")
-            print(f"  🗑️ حُذف {len(to_delete)} فيديو قديم لـ {pub_name}")
-    except Exception as e:
-        print(f"  ⚠️ فشل حذف القديم: {e}")
 
     # نص المنشور
     final_post_text = post_text or video_title
